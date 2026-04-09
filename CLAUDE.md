@@ -30,9 +30,9 @@
 
 ## cron 설정
 ```
-*/10 * * * * python3 /opt/batch_monitor/detector.py >> /var/log/detector.log 2>&1
-*/5  * * * * python3 /opt/batch_monitor/sender.py   >> /var/log/sender.log  2>&1
-0 2  * * 0   python3 /opt/batch_monitor/trainer.py  >> /var/log/trainer.log 2>&1
+*/10 * * * * python3 {설치경로}/detector.py >> /var/log/detector.log 2>&1
+*/5  * * * * python3 {설치경로}/sender.py   >> /var/log/sender.log  2>&1
+0 2  * * 0   python3 {설치경로}/trainer.py  >> /var/log/trainer.log 2>&1
 ```
 
 ## DB 정보
@@ -169,8 +169,8 @@ features = [
 ```
 
 ## 슬랙 알람
-- 명령어: sh /data/tpwork/shell/NXCOM/mon_slack.sh {채널명} {txt파일경로}
-- txt 저장 경로: /data/batch_alarms/
+- 명령어: sh {SLACK_SCRIPT} {SLACK_CHANNEL} {txt파일경로}
+- txt 저장 경로: {ALARM_DIR}
 - 파일명 형식: ALARM_{FILE_ID}_{YYYYMMDD_HHMMSS}.txt
 
 ## 설치된 패키지 (추가 설치 불필요)
@@ -188,17 +188,17 @@ features = [
 
 ## 파일/디렉토리 구조
 ```
-/opt/batch_monitor/
-├── config.py       ← DB접속정보, 경로, 설정값
+{설치경로}/
+├── config.py       ← DB접속정보, 경로, 설정값 (.env에서 로드)
 ├── detector.py     ← 감지 프로세스
 ├── sender.py       ← 전송 프로세스
 └── trainer.py      ← 모델 재학습
 
-/data/models/
+{MODEL_DIR}/
 ├── {FILE_ID}_iso.pkl
 └── {FILE_ID}_scaler.pkl
 
-/data/batch_alarms/
+{ALARM_DIR}/
 └── ALARM_{FILE_ID}_{YYYYMMDD_HHMMSS}.txt
 ```
 
