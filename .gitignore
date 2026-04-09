@@ -1,0 +1,27 @@
+.DS_Store
+Thumbs.db
+
+# Python cache / virtual env
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+
+# Local environment and secrets
+.env
+.env.*
+*.pem
+*.key
+
+# Logs and runtime artifacts
+*.log
+*.pid
+*.out
+*.err
+
+# Model / data artifacts (if generated locally later)
+/data/
+/models/
