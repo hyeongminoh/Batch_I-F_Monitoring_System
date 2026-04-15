@@ -19,6 +19,12 @@ from config import (
     MODEL_DIR, OLLAMA_URL, OLLAMA_MODEL, OLLAMA_TIMEOUT,
     HISTORY_DAYS, MIN_SAMPLE_COUNT, REGR_ID
 )
+from sql.detector_sql import (
+    GET_EXCLUDED_FILE_IDS,
+    GET_HISTORICAL_DATA,
+    HAS_ALARM_TODAY,
+    INSERT_ALARM,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -39,7 +45,7 @@ def get_connection():
 # ============================================================
 def get_excluded_file_ids(conn):
     with conn.cursor() as cur:
-        cur.execute("SELECT FILE_ID FROM BAT_MNTLST_EXC WHERE USE_YN = 'Y'")
+        cur.execute(GET_EXCLUDED_FILE_IDS)
         return {row[0] for row in cur.fetchall()}
 
 
@@ -47,19 +53,8 @@ def get_excluded_file_ids(conn):
 # 과거 90일 수신 이력 조회
 # ============================================================
 def get_historical_data(conn):
-    sql = """
-        SELECT FILE_ID,
-               REG_DT,
-               NVL(TOT_REC_CNT, 0)  AS TOT_REC_CNT,
-               NVL(SEND_REC_CNT, 0) AS SEND_REC_CNT
-        FROM   COM_BATFILE_TRN
-        WHERE  TRANS_RCV_FG = 'R'
-          AND  STS_CD = '3'
-          AND  REG_DT >= SYSDATE - :days
-        ORDER  BY FILE_ID, REG_DT
-    """
     with conn.cursor() as cur:
-        cur.execute(sql, days=HISTORY_DAYS)
+        cur.execute(GET_HISTORICAL_DATA, days=HISTORY_DAYS)
         rows = cur.fetchall()
 
     if not rows:
@@ -87,14 +82,8 @@ def has_arrived_today(file_df, today):
 # 오늘 이미 알람 발생 여부 확인
 # ============================================================
 def has_alarm_today(conn, file_id):
-    sql = """
-        SELECT COUNT(*)
-        FROM   BAT_ALARM_HIS
-        WHERE  FILE_ID = :file_id
-          AND  TRUNC(ALARM_DT) = TRUNC(SYSDATE)
-    """
     with conn.cursor() as cur:
-        cur.execute(sql, file_id=file_id)
+        cur.execute(HAS_ALARM_TODAY, file_id=file_id)
         return cur.fetchone()[0] > 0
 
 
@@ -259,25 +248,8 @@ def generate_alarm_message(file_id, freq_type, window, check_time,
 # ============================================================
 def insert_alarm(conn, file_id, freq_type, window, check_time,
                  delay_min, anomaly_score, alarm_msg, now):
-    sql = """
-        INSERT INTO BAT_ALARM_HIS (
-            MBRSH_PGM_ID, FILE_ID,    ALARM_ID,
-            ALARM_DT,     FREQUENCY_TYPE,
-            EXP_MIN_TIME, EXP_MED_TIME, EXP_MAX_TIME,
-            CHECK_TIME,   DELAY_MIN,    ANOMALY_SCORE,
-            ALARM_MSG,    SEND_STS,
-            REGR_ID,      REG_DT
-        ) VALUES (
-            :mbrsh,     :file_id,   SEQ_BAT_ALARM_HIS.NEXTVAL,
-            :alarm_dt,  :freq_type,
-            :exp_min,   :exp_med,   :exp_max,
-            :chk_time,  :delay_min, :anomaly_score,
-            :alarm_msg, '0',
-            :regr_id,   SYSDATE
-        )
-    """
     with conn.cursor() as cur:
-        cur.execute(sql, {
+        cur.execute(INSERT_ALARM, {
             'mbrsh':         MBRSH_PGM_ID,
             'file_id':       file_id,
             'alarm_dt':      now,

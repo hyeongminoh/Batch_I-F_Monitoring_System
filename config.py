@@ -46,8 +46,9 @@ SLACK_SCRIPT  = os.environ['SLACK_SCRIPT']
 # ============================================================
 # 파일 경로 (.env 에서 주입)
 # ============================================================
-ALARM_DIR = os.environ['ALARM_DIR']   # 알람 txt 저장 경로
-MODEL_DIR = os.environ['MODEL_DIR']   # Isolation Forest 모델 저장 경로
+BASE_DATA_DIR = os.environ.get('BASE_DATA_DIR', '/data/batch_monitoring_system')
+ALARM_DIR = os.environ.get('ALARM_DIR', os.path.join(BASE_DATA_DIR, 'batch_alarms'))
+MODEL_DIR = os.environ.get('MODEL_DIR', os.path.join(BASE_DATA_DIR, 'models'))
 
 # ============================================================
 # Ollama LLM 설정
@@ -68,4 +69,4 @@ MIN_SAMPLE_COUNT   = 3     # 알람 발동 최소 샘플 수 (미만이면 알�
 # ============================================================
 # 공통 메타 정보
 # ============================================================
-REGR_ID = "BATCH_MON"  # 등록자 ID
+REGR_ID = "BAT_MON"  # 등록자 ID

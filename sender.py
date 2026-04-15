@@ -15,6 +15,11 @@ from config import (
     DB_USER, DB_PASSWORD, DB_DSN,
     SLACK_CHANNEL, SLACK_SCRIPT, ALARM_DIR, REGR_ID
 )
+from sql.sender_sql import (
+    GET_PENDING_ALARMS,
+    UPDATE_SUCCESS,
+    UPDATE_FAILURE,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -34,14 +39,8 @@ def get_connection():
 # 전송 대기 알람 조회 (SEND_STS='0')
 # ============================================================
 def get_pending_alarms(conn):
-    sql = """
-        SELECT ALARM_ID, FILE_ID, ALARM_MSG
-        FROM   BAT_ALARM_HIS
-        WHERE  SEND_STS = '0'
-        ORDER  BY ALARM_DT
-    """
     with conn.cursor() as cur:
-        cur.execute(sql)
+        cur.execute(GET_PENDING_ALARMS)
         return cur.fetchall()
 
 
@@ -76,17 +75,8 @@ def send_slack(filepath):
 # 전송 성공 처리 → SEND_STS='1'
 # ============================================================
 def update_success(conn, alarm_id, file_path, now):
-    sql = """
-        UPDATE BAT_ALARM_HIS
-        SET    SEND_STS      = '1',
-               SEND_DT       = :send_dt,
-               TGT_FILE_PATH = :file_path,
-               UPDR_ID       = :updr_id,
-               UPD_DT        = SYSDATE
-        WHERE  ALARM_ID = :alarm_id
-    """
     with conn.cursor() as cur:
-        cur.execute(sql, {
+        cur.execute(UPDATE_SUCCESS, {
             'send_dt':   now,
             'file_path': file_path,
             'updr_id':   REGR_ID,
@@ -99,16 +89,8 @@ def update_success(conn, alarm_id, file_path, now):
 # 전송 실패 처리 → SEND_STS='9'
 # ============================================================
 def update_failure(conn, alarm_id, err_msg):
-    sql = """
-        UPDATE BAT_ALARM_HIS
-        SET    SEND_STS = '9',
-               ERR_MSG  = :err_msg,
-               UPDR_ID  = :updr_id,
-               UPD_DT   = SYSDATE
-        WHERE  ALARM_ID = :alarm_id
-    """
     with conn.cursor() as cur:
-        cur.execute(sql, {
+        cur.execute(UPDATE_FAILURE, {
             'err_msg':  str(err_msg)[:1000],
             'updr_id':  REGR_ID,
             'alarm_id': alarm_id,

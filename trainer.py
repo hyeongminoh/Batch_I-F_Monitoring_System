@@ -19,6 +19,10 @@ from config import (
     DB_USER, DB_PASSWORD, DB_DSN,
     MODEL_DIR, TRAIN_HISTORY_DAYS, MIN_SAMPLE_COUNT
 )
+from sql.trainer_sql import (
+    GET_EXCLUDED_FILE_IDS,
+    GET_TRAINING_DATA,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -39,7 +43,7 @@ def get_connection():
 # ============================================================
 def get_excluded_file_ids(conn):
     with conn.cursor() as cur:
-        cur.execute("SELECT FILE_ID FROM BAT_MNTLST_EXC WHERE USE_YN = 'Y'")
+        cur.execute(GET_EXCLUDED_FILE_IDS)
         return {row[0] for row in cur.fetchall()}
 
 
@@ -47,19 +51,8 @@ def get_excluded_file_ids(conn):
 # 학습 데이터 조회 (과거 180일)
 # ============================================================
 def get_training_data(conn):
-    sql = """
-        SELECT FILE_ID,
-               REG_DT,
-               NVL(TOT_REC_CNT, 0)  AS TOT_REC_CNT,
-               NVL(SEND_REC_CNT, 0) AS SEND_REC_CNT
-        FROM   COM_BATFILE_TRN
-        WHERE  TRANS_RCV_FG = 'R'
-          AND  STS_CD = '3'
-          AND  REG_DT >= SYSDATE - :days
-        ORDER  BY FILE_ID, REG_DT
-    """
     with conn.cursor() as cur:
-        cur.execute(sql, days=TRAIN_HISTORY_DAYS)
+        cur.execute(GET_TRAINING_DATA, days=TRAIN_HISTORY_DAYS)
         rows = cur.fetchall()
 
     if not rows:
