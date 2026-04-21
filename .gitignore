@@ -26,3 +26,6 @@ env/
 # Model / data artifacts (if generated locally later)
 /data/
 /models/
+
+# Claude Code internal directory
+.claude/
