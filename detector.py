@@ -5,20 +5,21 @@
 
 import sys
 import os
-import logging
 import numpy as np
 import pandas as pd
 from datetime import datetime
 import oracledb
 import joblib
-import requests
 
 sys.path.insert(0, '/opt/batch_monitor')
 from config import (
     DB_USER, DB_PASSWORD, DB_DSN, MBRSH_PGM_ID,
-    MODEL_DIR, OLLAMA_URL, OLLAMA_MODEL, OLLAMA_TIMEOUT,
+    MODEL_DIR, LOG_DIR, ALARM_DIR_FALLBACK, ALARM_DIR_LLM,
+    OLLAMA_URL, OLLAMA_MODEL, OLLAMA_TIMEOUT,
     HISTORY_DAYS, MIN_SAMPLE_COUNT, REGR_ID
 )
+import llm as llm_module
+from log_utils import setup_logger
 from sql.detector_sql import (
     GET_EXCLUDED_FILE_IDS,
     GET_HISTORICAL_DATA,
@@ -26,11 +27,7 @@ from sql.detector_sql import (
     INSERT_ALARM,
 )
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s'
-)
-log = logging.getLogger(__name__)
+log = setup_logger('detector', LOG_DIR)
 
 
 # ============================================================
@@ -91,14 +88,6 @@ def has_alarm_today(conn, file_id):
 # 수신 주기 분류
 # ============================================================
 def classify_frequency(file_df):
-    """
-    median_gap 기준:
-      1일        → DAILY
-      6~8일      → WEEKLY
-      25~35일    → MONTHLY
-      std > 50%  → IRREGULAR  (알람 제외)
-      그 외      → EVERY_{n}_DAYS
-    """
     dates = sorted(file_df['arrival_date'].unique())
     if len(dates) < 2:
         return "IRREGULAR", 0, 0
@@ -134,11 +123,7 @@ def sec_to_hms(sec):
 
 
 def calc_arrival_window(file_df, today):
-    """
-    컨텍스트 필터: 같은 요일 + 월말여부 동일한 날만 사용
-    sample_cnt < MIN_SAMPLE_COUNT 이면 None 반환 (알람 제외)
-    """
-    today_weekday     = today.weekday()
+    today_weekday      = today.weekday()
     today_is_month_end = 1 if today.day >= 25 else 0
 
     mask     = ((file_df['weekday'] == today_weekday) &
@@ -180,7 +165,7 @@ def get_anomaly_score(file_id, file_df, today, now):
     scaler_path = os.path.join(MODEL_DIR, f"{file_id}_scaler.pkl")
 
     if not (os.path.exists(iso_path) and os.path.exists(scaler_path)):
-        log.warning(f"{file_id}: 모델 파일 없음 → 기본값 -0.5 사용")
+        log.warning(f"  [{file_id}] 모델 파일 없음 → 기본값 -0.5 사용")
         return -0.5
 
     try:
@@ -193,54 +178,70 @@ def get_anomaly_score(file_id, file_df, today, now):
         weekday      = today.weekday()
         is_month_end = 1 if today.day >= 25 else 0
 
+        log.info(f"  [{file_id}] 모델 입력 피처: "
+                 f"arrival_sec={arrival_sec}, tot_rec={tot_rec_cnt:.0f}, "
+                 f"send_rec={send_rec_cnt:.0f}, weekday={weekday}, month_end={is_month_end}")
+
         X = np.array([[arrival_sec, tot_rec_cnt, send_rec_cnt, weekday, is_month_end]])
         score = iso.score_samples(scaler.transform(X))[0]
-        return round(float(score), 4)
+        score = round(float(score), 4)
+
+        log.info(f"  [{file_id}] anomaly score = {score} "
+                 f"({'정상 범위' if score > -0.5 else '이상 의심'}, 음수일수록 이상)")
+        return score
 
     except Exception as e:
-        log.error(f"{file_id}: anomaly score 계산 실패 - {e}")
+        log.error(f"  [{file_id}] anomaly score 계산 실패 - {e}")
         return -0.5
 
 
 # ============================================================
-# Ollama EXAONE 한국어 알람 메시지 생성
+# fallback 템플릿 메시지 생성
 # ============================================================
-def generate_alarm_message(file_id, freq_type, window, check_time,
-                            delay_min, anomaly_score, today):
-    is_month_end = today.day >= 25
-    prompt = (
-        f"다음 배치 파일 미수신 상황에 대한 한국어 알람 메시지를 3~4문장으로 작성하세요.\n"
-        f"마지막 문장은 반드시 \"즉시 확인이 필요합니다.\"로 끝내세요.\n\n"
-        f"- 파일ID: {file_id}\n"
-        f"- 수신 주기: {freq_type}\n"
-        f"- 예상 도착 범위: {window['exp_min']} ~ {window['exp_max']} (중앙값: {window['exp_med']})\n"
-        f"- 현재 시각: {check_time}\n"
-        f"- 지연 시간: {delay_min}분\n"
-        f"- 이상 점수: {anomaly_score:.4f} (음수일수록 이상)\n"
-        f"- 월말 여부: {'예' if is_month_end else '아니오'}\n\n"
-        f"알람 메시지:"
-    )
-
-    try:
-        resp = requests.post(
-            OLLAMA_URL,
-            json={"model": OLLAMA_MODEL, "prompt": prompt, "stream": False},
-            timeout=OLLAMA_TIMEOUT,
-        )
-        if resp.status_code == 200:
-            msg = resp.json().get('response', '').strip()
-            if msg:
-                return msg
-    except Exception as e:
-        log.warning(f"{file_id}: LLM 호출 실패 ({e}) → fallback 메시지 사용")
-
-    # fallback 템플릿 (알람은 반드시 발송)
+def build_fallback_message(file_id, freq_type, window, delay_min):
     return (
-        f"[배치 파일 미수신 알람] 파일ID {file_id}의 배치 파일이 "
-        f"예정 마감 시각({window['exp_max']})을 {delay_min}분 초과하여 도착하지 않았습니다. "
-        f"수신 주기는 {freq_type}이며 이상 점수는 {anomaly_score:.4f}입니다. "
+        f"[배치 미수신 알람] {file_id}\n"
+        f"마감: {window['exp_max']} / 지연: {delay_min}분 / 주기: {freq_type}\n"
         f"즉시 확인이 필요합니다."
     )
+
+
+# ============================================================
+# 비교용 파일 저장 (fallback/, llm/ 디렉토리)
+# ============================================================
+def save_compare_file(directory, file_id, ts, message):
+    os.makedirs(directory, exist_ok=True)
+    filepath = os.path.join(directory, f"ALARM_{file_id}_{ts}.txt")
+    with open(filepath, 'w', encoding='utf-8') as f:
+        f.write(message)
+    return filepath
+
+
+# ============================================================
+# 두 메시지 생성 후 로그 비교 출력, 최종 메시지 반환
+# ============================================================
+def generate_alarm_message(file_id, freq_type, window, check_time,
+                            delay_min, anomaly_score, today, ts):
+    fallback_msg = build_fallback_message(file_id, freq_type, window, delay_min)
+    fallback_path = save_compare_file(ALARM_DIR_FALLBACK, file_id, ts, fallback_msg)
+
+    llm_msg, llm_ok = llm_module.generate(
+        file_id, freq_type, window, check_time, delay_min, anomaly_score, today,
+        OLLAMA_URL, OLLAMA_MODEL, OLLAMA_TIMEOUT,
+    )
+
+    log.info(f"  [{file_id}] ── 메시지 비교 ──────────────────────")
+    log.info(f"  [{file_id}] [fallback] → {fallback_path}\n{fallback_msg}")
+    if llm_ok:
+        llm_path = save_compare_file(ALARM_DIR_LLM, file_id, ts, llm_msg)
+        log.info(f"  [{file_id}] [LLM] → {llm_path}\n{llm_msg}")
+        log.info(f"  [{file_id}] → LLM 메시지 사용")
+    else:
+        log.info(f"  [{file_id}] [LLM] 사용 불가 (Ollama 미실행 or 오류)")
+        log.info(f"  [{file_id}] → fallback 메시지 사용")
+    log.info(f"  [{file_id}] ─────────────────────────────────────")
+
+    return llm_msg if llm_ok else fallback_msg
 
 
 # ============================================================
@@ -264,27 +265,33 @@ def insert_alarm(conn, file_id, freq_type, window, check_time,
             'regr_id':       REGR_ID,
         })
     conn.commit()
-    log.info(f"{file_id}: 알람 INSERT 완료 (delay={delay_min}분, score={anomaly_score})")
+    log.info(f"  [{file_id}] BAT_ALARM_HIS INSERT 완료")
 
 
 # ============================================================
 # main
 # ============================================================
 def main():
-    log.info("===== detector.py 시작 =====")
     now        = datetime.now()
     today      = now.date()
     check_time = now.strftime("%H:%M:%S")
+    ts         = now.strftime("%Y%m%d_%H%M%S")
+
+    log.info("")
+    log.info("▼" * 60)
+    log.info(f"  [RUN START] detector.py  {now.strftime('%Y-%m-%d %H:%M:%S')}")
+    log.info("▼" * 60)
 
     try:
         conn = get_connection()
+        log.info("DB 연결 성공")
     except Exception as e:
         log.error(f"DB 연결 실패: {e}")
         sys.exit(1)
 
     try:
         excluded = get_excluded_file_ids(conn)
-        log.info(f"제외 FILE_ID: {len(excluded)}건")
+        log.info(f"제외 FILE_ID: {sorted(excluded)} ({len(excluded)}건)")
 
         hist_df = get_historical_data(conn)
         if hist_df.empty:
@@ -293,36 +300,52 @@ def main():
 
         file_ids = [fid for fid in hist_df['file_id'].unique() if fid not in excluded]
         log.info(f"모니터링 대상 FILE_ID: {len(file_ids)}건")
+        log.info("-" * 60)
 
         alarm_cnt = 0
         for file_id in file_ids:
             try:
+                log.info(f"[{file_id}] 점검 시작")
                 file_df = hist_df[hist_df['file_id'] == file_id].copy()
 
                 # 1. 오늘 이미 도착했으면 스킵
                 if has_arrived_today(file_df, today):
+                    log.info(f"  [{file_id}] SKIP → 오늘 이미 수신 완료")
                     continue
 
                 # 2. 주기 분류 → IRREGULAR 스킵
                 freq_type, median_gap, std_gap = classify_frequency(file_df)
+                log.info(f"  [{file_id}] 수신 주기: {freq_type} "
+                         f"(median_gap={median_gap:.1f}일, std={std_gap:.1f}일)")
                 if freq_type == "IRREGULAR":
+                    log.info(f"  [{file_id}] SKIP → IRREGULAR (불규칙 수신 파일)")
                     continue
 
                 # 3. 오늘 이미 알람이 있으면 스킵 (중복 방지)
                 if has_alarm_today(conn, file_id):
+                    log.info(f"  [{file_id}] SKIP → 오늘 이미 알람 발송됨 (중복 방지)")
                     continue
 
                 # 4. 도착 window 계산 → 샘플 부족 스킵
                 window = calc_arrival_window(file_df, today)
                 if window is None:
+                    log.info(f"  [{file_id}] SKIP → 동일 요일/월말 조건 샘플 부족 "
+                             f"(최소 {MIN_SAMPLE_COUNT}건 필요)")
                     continue
+                log.info(f"  [{file_id}] 도착 window: "
+                         f"{window['exp_min']} ~ {window['exp_max']} "
+                         f"(중앙값={window['exp_med']}, 샘플={window['sample_cnt']}건)")
 
                 # 5. deadline(95th) 미초과 → 아직 기다림
                 if not is_past_deadline(window['exp_max'], now):
+                    log.info(f"  [{file_id}] SKIP → deadline({window['exp_max']}) 미초과, "
+                             f"현재 {check_time}")
                     continue
+                log.info(f"  [{file_id}] deadline({window['exp_max']}) 초과 확인 → 알람 발동")
 
                 # 6. 지연 분 계산
                 delay_min = calc_delay_min(window['exp_max'], now)
+                log.info(f"  [{file_id}] 지연 시간: {delay_min}분")
 
                 # 7. Isolation Forest anomaly score
                 anomaly_score = get_anomaly_score(file_id, file_df, today, now)
@@ -330,8 +353,9 @@ def main():
                 # 8. LLM 한국어 알람 메시지 생성
                 alarm_msg = generate_alarm_message(
                     file_id, freq_type, window, check_time,
-                    delay_min, anomaly_score, today
+                    delay_min, anomaly_score, today, ts
                 )
+                log.info(f"  [{file_id}] 알람 메시지:\n{alarm_msg}")
 
                 # 9. BAT_ALARM_HIS INSERT
                 insert_alarm(
@@ -339,12 +363,18 @@ def main():
                     delay_min, anomaly_score, alarm_msg, now
                 )
                 alarm_cnt += 1
+                log.info("-" * 60)
 
             except Exception as e:
-                log.error(f"{file_id}: 처리 중 오류 - {e}")
+                log.error(f"[{file_id}] 처리 중 오류 - {e}")
                 continue
 
-        log.info(f"===== detector.py 완료: {alarm_cnt}건 알람 생성 =====")
+        elapsed = int((datetime.now() - now).total_seconds())
+        log.info("▲" * 60)
+        log.info(f"  [RUN END  ] detector.py  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+                 f"  |  알람 {alarm_cnt}건  |  소요 {elapsed}초")
+        log.info("▲" * 60)
+        log.info("")
 
     finally:
         conn.close()

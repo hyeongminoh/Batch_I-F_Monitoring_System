@@ -22,10 +22,12 @@ env/
 *.pid
 *.out
 *.err
+/logs/
 
-# Model / data artifacts (if generated locally later)
-/data/
-/models/
+# Model / data artifacts
+/data/models/
+/data/batch_alarms/
+*.pkl
 
 # Claude Code internal directory
 .claude/

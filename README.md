@@ -1,4 +1,4 @@
-# 🔍 Batch I/F Monitoring System
+# Batch I/F Monitoring System
 
 > 망분리 온프레미스 리눅스 서버에서 동작하는 **배치 파일 미수신 탐지 및 슬랙 알람 시스템**  
 > 외부 인터넷 통신 없이 완전 로컬에서 동작합니다.
@@ -10,7 +10,7 @@
 
 ---
 
-## 📌 개요
+## 개요
 
 배치 파일이 정해진 시간 안에 수신되지 않을 경우, 이를 자동으로 감지하고 슬랙으로 알람을 발송하는 시스템입니다.
 
@@ -21,7 +21,7 @@
 
 ---
 
-## 🏗️ 아키텍처
+## 아키텍처
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -38,7 +38,7 @@
 │  3. 도착 window 계산 (5/50/95th)     │
 │  4. deadline(95th) 초과 감지         │
 │  5. Isolation Forest anomaly score   │
-│  6. EXAONE 한국어 알람 메시지 생성   │
+│  6. fallback / LLM 메시지 생성       │
 │  7. BAT_ALARM_HIS INSERT             │
 └──────────────────┬───────────────────┘
                    │ SEND_STS='0' (대기)
@@ -63,7 +63,7 @@
 
 ---
 
-## ⚙️ 핵심 로직
+## 핵심 로직
 
 ### 수신 주기 분류
 
@@ -112,9 +112,27 @@ features = [
 ]
 ```
 
+### 알람 메시지 생성 (llm.py)
+
+detector.py는 알람 발동 시 항상 두 가지 메시지를 모두 생성합니다.
+
+```
+1. fallback 템플릿 메시지  → batch_alarms/fallback/ 저장
+2. LLM(EXAONE) 메시지     → batch_alarms/llm/ 저장 (Ollama 연결 시)
+
+최종 슬랙 전송 메시지: LLM 성공 시 LLM 메시지, 실패 시 fallback
+```
+
+**알람 메시지 형식:**
+```
+[배치 미수신 알람] EB140402
+마감: 09:07:36 / 지연: 134분 / 주기: DAILY
+즉시 확인이 필요합니다.
+```
+
 ---
 
-## 🗄️ DB 테이블
+## DB 테이블
 
 | 테이블 | 유형 | 설명 |
 |---|---|---|
@@ -137,57 +155,104 @@ INSERT → '0' (대기)  →  '1' (전송 완료)
 
 ---
 
-## 📁 파일 구조
+## 파일 구조
 
 ```
 {설치경로}/
-├── .env              ← 민감 정보 (git 제외)
-├── config.py         ← .env 로드 및 설정값 관리
-├── detector.py       ← 미수신 감지 프로세스
-├── sender.py         ← 슬랙 전송 프로세스
-└── trainer.py        ← 모델 재학습 프로세스
+├── .env                  ← 민감 정보 (git 제외)
+├── config.py             ← .env 로드 및 설정값 관리
+├── detector.py           ← 미수신 감지 프로세스
+├── sender.py             ← 슬랙 전송 프로세스
+├── trainer.py            ← 모델 재학습 프로세스
+├── llm.py                ← Ollama EXAONE 메시지 생성 (detector에서 호출)
+├── log_utils.py          ← 공통 로그 설정 (날짜별 파일, 포맷 정의)
+├── test_db.py            ← DB 연동 테스트 스크립트
+├── requirements.txt      ← 의존 패키지 목록
+└── sql/
+    ├── detector_sql.py   ← detector 전용 SQL
+    ├── sender_sql.py     ← sender 전용 SQL
+    └── trainer_sql.py    ← trainer 전용 SQL
 
-{MODEL_DIR}/
+{MODEL_DIR}/              ← 기본: {BASE_DATA_DIR}/models
 ├── {FILE_ID}_iso.pkl
 └── {FILE_ID}_scaler.pkl
 
-{ALARM_DIR}/
-└── ALARM_{FILE_ID}_{YYYYMMDD_HHMMSS}.txt
+{ALARM_DIR}/              ← 기본: {BASE_DATA_DIR}/batch_alarms
+├── ALARM_{FILE_ID}_{YYYYMMDD_HHMMSS}.txt   ← 슬랙 전송용 (sender.py 생성)
+├── fallback/
+│   └── ALARM_{FILE_ID}_{YYYYMMDD_HHMMSS}.txt  ← 템플릿 메시지 비교용
+└── llm/
+    └── ALARM_{FILE_ID}_{YYYYMMDD_HHMMSS}.txt  ← LLM 메시지 비교용
+
+{LOG_DIR}/                ← 기본: {BASE_DATA_DIR}/logs
+├── detector_YYYYMMDD.log
+├── sender_YYYYMMDD.log
+├── trainer_YYYYMMDD.log
+└── test_db_YYYYMMDD.log
 ```
 
 ---
 
-## 🚀 설치 및 설정
+## 로그
 
-### 1. 필수 패키지 (별도 설치 불필요)
+### 포맷
 
 ```
-Python    3.9.18
-oracledb  3.3       # Oracle Thin mode (Instant Client 불필요)
-pandas
-numpy
-scikit-learn
-joblib
-requests
+[20260422][164950] [INFO    ] detector.py:287 | DB 연결 성공
+[20260422][164950] [WARNING ] detector.py:183 | [1500BIL906] 모델 파일 없음 → 기본값 -0.5 사용
 ```
 
-### 2. LLM 설치 (망분리 환경 반입 필요)
+- `[YYYYMMDD][HHMMSS]` — 실행 일시
+- `[LEVELNAME]` — INFO / WARNING / ERROR / DEBUG
+- `filename:lineno` — 소스 위치 (디버깅용)
+
+### detector.log 실행 구분
+
+cron으로 10분마다 실행되므로 각 실행 단위를 구분합니다.
+
+```
+▼▼▼ (60자) ▼▼▼
+  [RUN START] detector.py  2026-04-22 16:49:49
+▼▼▼▼▼▼▼▼▼▼▼▼▼▼
+  ... 처리 내용 ...
+▲▲▲ (60자) ▲▲▲
+  [RUN END  ] detector.py  2026-04-22 16:49:52  |  알람 1건  |  소요 3초
+▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+```
+
+실행 이력 빠른 확인:
+```bash
+grep "RUN" logs/detector_20260422.log
+```
+
+---
+
+## 설치 및 설정
+
+### 1. 패키지 설치
 
 ```bash
-# Ollama 설치
-chmod +x ollama-linux-amd64
-./ollama-linux-amd64 serve &
-
-# EXAONE 모델 등록
-ollama create exaone3.5:2.4b -f Modelfile
+pip install -r requirements.txt
 ```
 
-> 반입 필요 파일: `ollama-linux-amd64` (~50MB), `EXAONE-3.5-2.4B-Instruct-Q4_K_M.gguf` (~1.6GB)
+### 2. LLM 설치 (망분리 환경은 파일 반입 필요)
+
+```bash
+# 인터넷 환경
+curl -fsSL https://ollama.ai/install.sh | sh
+ollama pull exaone3.5:2.4b
+
+# 망분리 환경 (반입 필요 파일)
+# - ollama-linux-amd64 (~50MB)
+# - EXAONE-3.5-2.4B-Instruct-Q4_K_M.gguf (~1.6GB)
+chmod +x ollama-linux-amd64
+./ollama-linux-amd64 serve &
+ollama create exaone3.5:2.4b -f Modelfile
+```
 
 ### 3. 환경 설정
 
 ```bash
-# .env 파일 생성 후 실제 값 입력
 vi .env
 ```
 
@@ -204,41 +269,40 @@ MBRSH_PGM_ID=A
 SLACK_CHANNEL=your_slack_channel
 SLACK_SCRIPT=/path/to/mon_slack.sh
 
-# 경로
-ALARM_DIR=/path/to/batch_alarms
-MODEL_DIR=/path/to/models
+# 경로 (절대경로 권장)
+BASE_DATA_DIR=/data/batch_monitoring_system
+ALARM_DIR=/data/batch_monitoring_system/batch_alarms
+MODEL_DIR=/data/batch_monitoring_system/models
+LOG_DIR=/data/batch_monitoring_system/logs
 ```
 
-### 4. 모델 초기 학습
+### 4. DB 연동 확인
+
+```bash
+python3 test_db.py
+# → logs/test_db_YYYYMMDD.log 에서 결과 확인
+```
+
+### 5. 최초 모델 학습
 
 ```bash
 python3 trainer.py
+# → {MODEL_DIR}/{FILE_ID}_iso.pkl, {FILE_ID}_scaler.pkl 생성
 ```
 
-### 5. cron 등록
+### 6. cron 등록
 
 ```cron
-*/10 * * * * python3 {설치경로}/detector.py >> /var/log/detector.log 2>&1
-*/5  * * * * python3 {설치경로}/sender.py   >> /var/log/sender.log  2>&1
-0 2  * * 0   python3 {설치경로}/trainer.py  >> /var/log/trainer.log 2>&1
+*/10 * * * * python3 {설치경로}/detector.py
+*/5  * * * * python3 {설치경로}/sender.py
+0 2  * * 0   python3 {설치경로}/trainer.py
 ```
+
+> 로그는 각 스크립트가 `{LOG_DIR}` 에 날짜별로 직접 기록합니다.
 
 ---
 
-## 🤖 LLM 알람 메시지 예시
-
-```
-[배치 파일 미수신 알람] 파일ID EB140402의 배치 파일이 오늘 예정된
-수신 시간(09:00:00 ~ 11:30:00)을 45분 초과하여 아직 도착하지 않았습니다.
-해당 파일의 수신 주기는 DAILY이며, 이상 점수는 -0.6732로 평소와 다른
-패턴이 감지되었습니다. 즉시 확인이 필요합니다.
-```
-
-> LLM 호출 실패 시 fallback 템플릿 메시지로 자동 대체되어 알람은 **반드시** 발송됩니다.
-
----
-
-## 🔐 보안
+## 보안
 
 - DB 접속 정보, 슬랙 채널명, 서버 경로 등 모든 민감 정보는 `.env` 파일에서 관리
 - `.env`는 `.gitignore`에 등록되어 git에 포함되지 않음

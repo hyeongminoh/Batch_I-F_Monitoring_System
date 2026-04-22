@@ -47,8 +47,11 @@ SLACK_SCRIPT  = os.environ['SLACK_SCRIPT']
 # 파일 경로 (.env 에서 주입)
 # ============================================================
 BASE_DATA_DIR = os.environ.get('BASE_DATA_DIR', '/data/batch_monitoring_system')
-ALARM_DIR = os.environ.get('ALARM_DIR', os.path.join(BASE_DATA_DIR, 'batch_alarms'))
-MODEL_DIR = os.environ.get('MODEL_DIR', os.path.join(BASE_DATA_DIR, 'models'))
+ALARM_DIR          = os.environ.get('ALARM_DIR', os.path.join(BASE_DATA_DIR, 'batch_alarms'))
+ALARM_DIR_FALLBACK = os.path.join(ALARM_DIR, 'fallback')
+ALARM_DIR_LLM      = os.path.join(ALARM_DIR, 'llm')
+MODEL_DIR          = os.environ.get('MODEL_DIR', os.path.join(BASE_DATA_DIR, 'models'))
+LOG_DIR            = os.environ.get('LOG_DIR',   os.path.join(BASE_DATA_DIR, 'logs'))
 
 # ============================================================
 # Ollama LLM 설정

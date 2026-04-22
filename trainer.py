@@ -5,7 +5,6 @@
 
 import sys
 import os
-import logging
 import numpy as np
 import pandas as pd
 from datetime import datetime
@@ -17,18 +16,15 @@ from sklearn.preprocessing import StandardScaler
 sys.path.insert(0, '/opt/batch_monitor')
 from config import (
     DB_USER, DB_PASSWORD, DB_DSN,
-    MODEL_DIR, TRAIN_HISTORY_DAYS, MIN_SAMPLE_COUNT
+    MODEL_DIR, LOG_DIR, TRAIN_HISTORY_DAYS, MIN_SAMPLE_COUNT
 )
+from log_utils import setup_logger
 from sql.trainer_sql import (
     GET_EXCLUDED_FILE_IDS,
     GET_TRAINING_DATA,
 )
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s'
-)
-log = logging.getLogger(__name__)
+log = setup_logger('trainer', LOG_DIR)
 
 
 # ============================================================

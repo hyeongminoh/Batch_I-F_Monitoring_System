@@ -5,7 +5,6 @@
 
 import sys
 import os
-import logging
 import subprocess
 from datetime import datetime
 import oracledb
@@ -13,19 +12,16 @@ import oracledb
 sys.path.insert(0, '/opt/batch_monitor')
 from config import (
     DB_USER, DB_PASSWORD, DB_DSN,
-    SLACK_CHANNEL, SLACK_SCRIPT, ALARM_DIR, REGR_ID
+    SLACK_CHANNEL, SLACK_SCRIPT, ALARM_DIR, LOG_DIR, REGR_ID
 )
+from log_utils import setup_logger
 from sql.sender_sql import (
     GET_PENDING_ALARMS,
     UPDATE_SUCCESS,
     UPDATE_FAILURE,
 )
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s'
-)
-log = logging.getLogger(__name__)
+log = setup_logger('sender', LOG_DIR)
 
 
 # ============================================================
@@ -124,8 +120,8 @@ def main():
                 filepath = create_alarm_file(file_id, alarm_msg, now)
                 log.info(f"[{alarm_id}] {file_id}: 파일 생성 → {filepath}")
 
-                # 2. 슬랙 전송
-                send_slack(filepath)
+                # 2. 슬랙 전송 (mon_slack.sh 미설치 환경에서는 주석 처리)
+                # send_slack(filepath)
 
                 # 3. 성공 처리
                 update_success(conn, alarm_id, filepath, now)
