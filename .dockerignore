@@ -1,0 +1,31 @@
+.git
+.gitignore
+README*
+CLAUDE.md
+
+# Secrets (never send to build context)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Local dev artifacts
+.venv
+venv
+env
+__pycache__
+*.py[cod]
+*.pyo
+*.pyd
+*.pkl
+
+# Runtime data (should be volumes, not image layers)
+data
+logs
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode
+.idea

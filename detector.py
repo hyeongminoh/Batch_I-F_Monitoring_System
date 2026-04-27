@@ -20,11 +20,14 @@ from config import (
 )
 import llm as llm_module
 from log_utils import setup_logger
+from freq_utils import classify_frequency, sec_to_hms
 from sql.detector_sql import (
     GET_EXCLUDED_FILE_IDS,
     GET_HISTORICAL_DATA,
     HAS_ALARM_TODAY,
     INSERT_ALARM,
+    GET_FREQ_MST,
+    UPSERT_FREQ_MST_FB,
 )
 
 log = setup_logger('detector', LOG_DIR)
@@ -85,43 +88,8 @@ def has_alarm_today(conn, file_id):
 
 
 # ============================================================
-# 수신 주기 분류
-# ============================================================
-def classify_frequency(file_df):
-    dates = sorted(file_df['arrival_date'].unique())
-    if len(dates) < 2:
-        return "IRREGULAR", 0, 0
-
-    gaps = [(dates[i + 1] - dates[i]).days for i in range(len(dates) - 1)]
-    median_gap = np.median(gaps)
-    std_gap    = np.std(gaps)
-    gap        = round(median_gap)
-
-    if gap == 0:
-        return "IRREGULAR", median_gap, std_gap
-
-    if std_gap > median_gap * 0.5:
-        freq_type = "IRREGULAR"
-    elif gap == 1:
-        freq_type = "DAILY"
-    elif gap in (6, 7, 8):
-        freq_type = "WEEKLY"
-    elif 25 <= gap <= 35:
-        freq_type = "MONTHLY"
-    else:
-        freq_type = f"EVERY_{gap}_DAYS"
-
-    return freq_type, median_gap, std_gap
-
-
-# ============================================================
 # 도착 window 계산 (5th / 50th / 95th percentile)
 # ============================================================
-def sec_to_hms(sec):
-    sec = int(sec)
-    return f"{sec // 3600:02d}:{(sec % 3600) // 60:02d}:{sec % 60:02d}"
-
-
 def calc_arrival_window(file_df, today):
     today_weekday      = today.weekday()
     today_is_month_end = 1 if today.day >= 25 else 0
@@ -155,6 +123,44 @@ def calc_delay_min(exp_max_time, now):
     deadline = h * 3600 + m * 60 + s
     now_sec  = now.hour * 3600 + now.minute * 60 + now.second
     return max(0, (now_sec - deadline) // 60)
+
+
+# ============================================================
+# BAT_FILE_FREQ_MST 전체 로드 (run 시작 시 1회)
+# ============================================================
+def load_freq_mst(conn):
+    with conn.cursor() as cur:
+        cur.execute(GET_FREQ_MST)
+        rows = cur.fetchall()
+    result = {}
+    for file_id, effective_src, freq_type, median_gap, std_gap, round_gap in rows:
+        result[file_id] = {
+            'effective_src': effective_src,
+            'freq_type':     freq_type or 'IRREGULAR',
+            'median_gap':    float(median_gap or 0),
+            'std_gap':       float(std_gap or 0),
+        }
+    return result
+
+
+# ============================================================
+# BAT_FILE_FREQ_MST FB 기록 (trainer 미실행 FILE_ID 한정)
+# ============================================================
+def upsert_freq_mst_fb(conn, file_id, freq_type, median_gap, std_gap, file_df):
+    with conn.cursor() as cur:
+        cur.execute(UPSERT_FREQ_MST_FB, {
+            'file_id':     file_id,
+            'freq_type':   freq_type,
+            'median_gap':  round(median_gap, 4),
+            'std_gap':     round(std_gap, 4),
+            'round_gap':   round(median_gap),
+            'sample_cnt':  len(file_df),
+            'win_days':    HISTORY_DAYS,
+            'analysis_st': file_df['reg_dt'].min().to_pydatetime(),
+            'analysis_ed': file_df['reg_dt'].max().to_pydatetime(),
+            'regr_id':     REGR_ID,
+        })
+    conn.commit()
 
 
 # ============================================================
@@ -298,6 +304,11 @@ def main():
             log.info("과거 수신 데이터 없음. 종료.")
             return
 
+        freq_mst = load_freq_mst(conn)
+        log.info(f"BAT_FILE_FREQ_MST 로드: {len(freq_mst)}건 "
+                 f"(T={sum(1 for v in freq_mst.values() if v['effective_src'] == 'T')}, "
+                 f"D={sum(1 for v in freq_mst.values() if v['effective_src'] == 'D')})")
+
         file_ids = [fid for fid in hist_df['file_id'].unique() if fid not in excluded]
         log.info(f"모니터링 대상 FILE_ID: {len(file_ids)}건")
         log.info("-" * 60)
@@ -313,10 +324,27 @@ def main():
                     log.info(f"  [{file_id}] SKIP → 오늘 이미 수신 완료")
                     continue
 
-                # 2. 주기 분류 → IRREGULAR 스킵
-                freq_type, median_gap, std_gap = classify_frequency(file_df)
-                log.info(f"  [{file_id}] 수신 주기: {freq_type} "
-                         f"(median_gap={median_gap:.1f}일, std={std_gap:.1f}일)")
+                # 2. 수신 주기 분류
+                #    BAT_FILE_FREQ_MST(T=trainer/D=detector) 우선,
+                #    미등록 FILE_ID는 직접 계산 후 FB로 기록
+                profile = freq_mst.get(file_id)
+                if profile:
+                    freq_type  = profile['freq_type']
+                    median_gap = profile['median_gap']
+                    std_gap    = profile['std_gap']
+                    log.info(f"  [{file_id}] 수신 주기 (MST/{profile['effective_src']}): "
+                             f"{freq_type} (median={median_gap:.1f}일, std={std_gap:.1f}일)")
+                else:
+                    freq_type, median_gap, std_gap = classify_frequency(file_df)
+                    log.info(f"  [{file_id}] 수신 주기 (계산): {freq_type} "
+                             f"(median={median_gap:.1f}일, std={std_gap:.1f}일)")
+                    try:
+                        upsert_freq_mst_fb(conn, file_id, freq_type, median_gap,
+                                           std_gap, file_df)
+                        log.info(f"  [{file_id}] BAT_FILE_FREQ_MST FB 기록 완료")
+                    except Exception as fb_e:
+                        log.warning(f"  [{file_id}] BAT_FILE_FREQ_MST FB 기록 실패(무시): {fb_e}")
+
                 if freq_type == "IRREGULAR":
                     log.info(f"  [{file_id}] SKIP → IRREGULAR (불규칙 수신 파일)")
                     continue

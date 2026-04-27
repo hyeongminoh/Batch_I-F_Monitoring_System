@@ -1,0 +1,93 @@
+services:
+
+  # ── detector: 10분마다 미수신 감지 ──────────────────────────
+  detector:
+    build: .
+    image: batch-monitor
+    container_name: batch-detector
+    command: >
+      bash -c "
+        while true; do
+          python detector.py
+          sleep 600
+        done
+      "
+    env_file: .env
+    environment: &common_env
+      BASE_DATA_DIR: /data
+      ALARM_DIR: /data/batch_alarms
+      MODEL_DIR: /data/models
+      LOG_DIR: /logs
+      OLLAMA_URL: http://ollama:11434/api/generate
+    volumes:
+      - batch-data:/data
+      - batch-logs:/logs
+    depends_on:
+      ollama:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── sender: 5분마다 슬랙 전송 ───────────────────────────────
+  sender:
+    image: batch-monitor
+    container_name: batch-sender
+    command: >
+      bash -c "
+        while true; do
+          python sender.py
+          sleep 300
+        done
+      "
+    env_file: .env
+    environment:
+      <<: *common_env
+    volumes:
+      - batch-data:/data
+      - batch-logs:/logs
+    depends_on:
+      - detector
+    restart: unless-stopped
+
+  # ── trainer: 매주 일요일 02:00 재학습 ───────────────────────
+  trainer:
+    image: batch-monitor
+    container_name: batch-trainer
+    command: >
+      bash -c "
+        while true; do
+          now=$$(date '+%u %H:%M')
+          if [ \"$$now\" = \"7 02:00\" ]; then
+            python trainer.py
+            sleep 60
+          fi
+          sleep 30
+        done
+      "
+    env_file: .env
+    environment:
+      <<: *common_env
+    volumes:
+      - batch-data:/data
+      - batch-logs:/logs
+    restart: unless-stopped
+
+  # ── ollama: EXAONE LLM 서빙 ─────────────────────────────────
+  ollama:
+    image: ollama/ollama
+    container_name: batch-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    healthcheck:
+      # curl 미포함 이미지에서도 동작하도록 ollama CLI 기반으로 체크
+      test: ["CMD", "sh", "-c", "ollama list >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  batch-data:    # detector/sender/trainer 공유 (models + alarms)
+  batch-logs:    # 날짜별 로그 파일
+  ollama-models: # EXAONE 모델 파일

@@ -16,12 +16,14 @@ from sklearn.preprocessing import StandardScaler
 sys.path.insert(0, '/opt/batch_monitor')
 from config import (
     DB_USER, DB_PASSWORD, DB_DSN,
-    MODEL_DIR, LOG_DIR, TRAIN_HISTORY_DAYS, MIN_SAMPLE_COUNT
+    MODEL_DIR, LOG_DIR, TRAIN_HISTORY_DAYS, MIN_SAMPLE_COUNT, REGR_ID
 )
 from log_utils import setup_logger
+from freq_utils import classify_frequency
 from sql.trainer_sql import (
     GET_EXCLUDED_FILE_IDS,
     GET_TRAINING_DATA,
+    UPSERT_FREQ_MST,
 )
 
 log = setup_logger('trainer', LOG_DIR)
@@ -56,6 +58,7 @@ def get_training_data(conn):
 
     df = pd.DataFrame(rows, columns=['file_id', 'reg_dt', 'tot_rec_cnt', 'send_rec_cnt'])
     df['reg_dt']       = pd.to_datetime(df['reg_dt'])
+    df['arrival_date'] = df['reg_dt'].dt.date
     df['arrival_sec']  = (df['reg_dt'].dt.hour * 3600
                           + df['reg_dt'].dt.minute * 60
                           + df['reg_dt'].dt.second)
@@ -86,6 +89,26 @@ def train_model(file_df):
     )
     iso.fit(X_scaled)
     return iso, scaler
+
+
+# ============================================================
+# BAT_FILE_FREQ_MST UPSERT (MAIN)
+# ============================================================
+def upsert_freq_mst(conn, file_id, freq_type, median_gap, std_gap, sample_cnt, file_df):
+    with conn.cursor() as cur:
+        cur.execute(UPSERT_FREQ_MST, {
+            'file_id':     file_id,
+            'freq_type':   freq_type,
+            'median_gap':  round(median_gap, 4),
+            'std_gap':     round(std_gap, 4),
+            'round_gap':   round(median_gap),
+            'sample_cnt':  sample_cnt,
+            'win_days':    TRAIN_HISTORY_DAYS,
+            'analysis_st': file_df['reg_dt'].min().to_pydatetime(),
+            'analysis_ed': file_df['reg_dt'].max().to_pydatetime(),
+            'regr_id':     REGR_ID,
+        })
+    conn.commit()
 
 
 # ============================================================
@@ -141,7 +164,12 @@ def main():
                 iso, scaler = train_model(file_df)
                 iso_path, _ = save_models(file_id, iso, scaler)
 
-                log.info(f"{file_id}: 학습 완료 (샘플={len(file_df)}건) → {iso_path}")
+                freq_type, median_gap, std_gap = classify_frequency(file_df)
+                upsert_freq_mst(conn, file_id, freq_type, median_gap, std_gap,
+                                len(file_df), file_df)
+
+                log.info(f"{file_id}: 학습 완료 (샘플={len(file_df)}건, "
+                         f"주기={freq_type}) → {iso_path}")
                 success_cnt += 1
 
             except Exception as e:

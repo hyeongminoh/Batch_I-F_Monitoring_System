@@ -29,5 +29,8 @@ env/
 /data/batch_alarms/
 *.pkl
 
+# Docker
+docker-compose.override.yml
+
 # Claude Code internal directory
 .claude/
