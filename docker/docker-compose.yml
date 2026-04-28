@@ -1,19 +1,13 @@
 services:
 
-  # ── detector: 10분마다 미수신 감지 ──────────────────────────
+  # ── detector ─────────────────────────────────────────────────
   detector:
     build:
       context: ..
       dockerfile: docker/Dockerfile
     image: batch-monitor
     container_name: batch-detector
-    command: >
-      bash -c "
-        while true; do
-          python detector.py
-          sleep 600
-        done
-      "
+    command: ["sleep", "infinity"]
     env_file: ../.env
     environment: &common_env
       BASE_DATA_DIR: /data
@@ -29,17 +23,11 @@ services:
         condition: service_completed_successfully
     restart: unless-stopped
 
-  # ── sender: 5분마다 슬랙 전송 ───────────────────────────────
+  # ── sender ───────────────────────────────────────────────────
   sender:
     image: batch-monitor
     container_name: batch-sender
-    command: >
-      bash -c "
-        while true; do
-          python sender.py
-          sleep 300
-        done
-      "
+    command: ["sleep", "infinity"]
     env_file: ../.env
     environment:
       <<: *common_env
@@ -50,21 +38,11 @@ services:
       - detector
     restart: unless-stopped
 
-  # ── trainer: 매주 일요일 02:00 재학습 ───────────────────────
+  # ── trainer ──────────────────────────────────────────────────
   trainer:
     image: batch-monitor
     container_name: batch-trainer
-    command: >
-      bash -c "
-        while true; do
-          now=$$(date '+%u %H:%M')
-          if [ \"$$now\" = \"7 02:00\" ]; then
-            python trainer.py
-            sleep 60
-          fi
-          sleep 30
-        done
-      "
+    command: ["sleep", "infinity"]
     env_file: ../.env
     environment:
       <<: *common_env
