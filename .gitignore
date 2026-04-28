@@ -24,9 +24,8 @@ env/
 *.err
 /logs/
 
-# Model / data artifacts
-/data/models/
-/data/batch_alarms/
+# Model / data artifacts (docker bind mount 생성 디렉토리 포함)
+/data/
 *.pkl
 
 # Docker

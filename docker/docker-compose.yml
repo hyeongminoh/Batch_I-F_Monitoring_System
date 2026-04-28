@@ -22,11 +22,11 @@ services:
       LOG_DIR: /logs
       OLLAMA_URL: http://ollama:11434/api/generate
     volumes:
-      - batch-data:/data
-      - batch-logs:/logs
+      - ../data:/data
+      - ../logs:/logs
     depends_on:
-      ollama:
-        condition: service_healthy
+      ollama-init:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   # ── sender: 5분마다 슬랙 전송 ───────────────────────────────
@@ -44,8 +44,8 @@ services:
     environment:
       <<: *common_env
     volumes:
-      - batch-data:/data
-      - batch-logs:/logs
+      - ../data:/data
+      - ../logs:/logs
     depends_on:
       - detector
     restart: unless-stopped
@@ -69,8 +69,8 @@ services:
     environment:
       <<: *common_env
     volumes:
-      - batch-data:/data
-      - batch-logs:/logs
+      - ../data:/data
+      - ../logs:/logs
     restart: unless-stopped
 
   # ── ollama: EXAONE LLM 서빙 ─────────────────────────────────
@@ -82,14 +82,23 @@ services:
     volumes:
       - ollama-models:/root/.ollama
     healthcheck:
-      # curl 미포함 이미지에서도 동작하도록 ollama CLI 기반으로 체크
       test: ["CMD", "sh", "-c", "ollama list >/dev/null 2>&1"]
       interval: 10s
       timeout: 5s
       retries: 5
     restart: unless-stopped
 
+  # ── ollama-init: EXAONE 모델 최초 1회 자동 pull 후 종료 ─────
+  ollama-init:
+    image: ollama/ollama
+    container_name: batch-ollama-init
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["ollama", "pull", "exaone3.5:2.4b"]
+    restart: "no"
+
 volumes:
-  batch-data:    # detector/sender/trainer 공유 (models + alarms)
-  batch-logs:    # 날짜별 로그 파일
-  ollama-models: # EXAONE 모델 파일
+  ollama-models: # EXAONE 모델 파일 (재시작해도 재다운로드 불필요)
