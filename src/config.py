@@ -10,10 +10,18 @@ import os
 # ============================================================
 def _load_env(env_path=None):
     if env_path is None:
-        env_path = os.path.join(os.path.dirname(__file__), '.env')
-    if not os.path.exists(env_path):
+        candidates = [
+            os.path.join(os.path.dirname(__file__), '.env'),                 # src/.env
+            os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env') # project-root/.env
+        ]
+    else:
+        candidates = [env_path]
+
+    target = next((p for p in candidates if os.path.exists(p)), None)
+    if not target:
         return
-    with open(env_path, encoding='utf-8') as f:
+
+    with open(target, encoding='utf-8') as f:
         for line in f:
             line = line.strip()
             if not line or line.startswith('#') or '=' not in line:
@@ -58,6 +66,7 @@ LOG_DIR            = os.environ.get('LOG_DIR',   os.path.join(BASE_DATA_DIR, 'lo
 # ============================================================
 # Ollama에 모델 등록 시 사용한 이름으로 변경 필요
 # 예: ollama create exaone3.5:2.4b -f Modelfile
+USE_LLM        = os.environ.get('USE_LLM', '1') not in ('0', 'false', 'False', 'FALSE')
 OLLAMA_URL     = "http://localhost:11434/api/generate"
 OLLAMA_MODEL   = "exaone3.5:2.4b"
 OLLAMA_TIMEOUT = 60  # 초

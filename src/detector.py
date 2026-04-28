@@ -15,7 +15,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from config import (
     DB_USER, DB_PASSWORD, DB_DSN, MBRSH_PGM_ID,
     MODEL_DIR, LOG_DIR, ALARM_DIR_FALLBACK, ALARM_DIR_LLM,
-    OLLAMA_URL, OLLAMA_MODEL, OLLAMA_TIMEOUT,
+    USE_LLM, OLLAMA_URL, OLLAMA_MODEL, OLLAMA_TIMEOUT,
     HISTORY_DAYS, MIN_SAMPLE_COUNT, REGR_ID
 )
 import llm as llm_module
@@ -231,10 +231,12 @@ def generate_alarm_message(file_id, freq_type, window, check_time,
     fallback_msg = build_fallback_message(file_id, freq_type, window, delay_min)
     fallback_path = save_compare_file(ALARM_DIR_FALLBACK, file_id, ts, fallback_msg)
 
-    llm_msg, llm_ok = llm_module.generate(
-        file_id, freq_type, window, check_time, delay_min, anomaly_score, today,
-        OLLAMA_URL, OLLAMA_MODEL, OLLAMA_TIMEOUT,
-    )
+    llm_msg, llm_ok = (None, False)
+    if USE_LLM:
+        llm_msg, llm_ok = llm_module.generate(
+            file_id, freq_type, window, check_time, delay_min, anomaly_score, today,
+            OLLAMA_URL, OLLAMA_MODEL, OLLAMA_TIMEOUT,
+        )
 
     log.info(f"  [{file_id}] ── 메시지 비교 ──────────────────────")
     log.info(f"  [{file_id}] [fallback] → {fallback_path}\n{fallback_msg}")
