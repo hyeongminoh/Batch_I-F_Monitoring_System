@@ -1,6 +1,6 @@
 # ============================================================
 # sender.py - 슬랙 알람 전송 프로세스
-# cron: */5 * * * * python3 /opt/batch_monitor/sender.py >> /var/log/sender.log 2>&1
+# cron: */5 * * * * python3 /opt/batch_monitor/src/sender.py >> /var/log/sender.log 2>&1
 # ============================================================
 
 import sys
@@ -9,7 +9,7 @@ import subprocess
 from datetime import datetime
 import oracledb
 
-sys.path.insert(0, '/opt/batch_monitor')
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from config import (
     DB_USER, DB_PASSWORD, DB_DSN,
     SLACK_CHANNEL, SLACK_SCRIPT, ALARM_DIR, LOG_DIR, REGR_ID

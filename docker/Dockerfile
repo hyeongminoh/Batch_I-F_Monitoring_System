@@ -18,14 +18,14 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1
 ENV PIP_NO_CACHE_DIR=1
 
-# 패키지 설치
+# 패키지 설치 (build context: 프로젝트 루트)
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
-# 소스 복사
-COPY config.py detector.py sender.py trainer.py \
-     llm.py log_utils.py freq_utils.py ./
-COPY sql/ ./sql/
+# 소스 복사 (src/ → /app/)
+COPY src/config.py src/detector.py src/sender.py src/trainer.py \
+     src/llm.py src/log_utils.py src/freq_utils.py ./
+COPY src/sql/ ./sql/
 
 # 데이터/로그 디렉토리 생성
 RUN mkdir -p /data/batch_alarms/fallback \

@@ -190,21 +190,32 @@ INSERT → '0' (대기)  →  '1' (전송 완료)
 
 ```
 {설치경로}/
-├── .env                  ← 민감 정보 (git 제외)
-├── config.py             ← .env 로드 및 설정값 관리
-├── freq_utils.py         ← 공통 주기 분류 유틸 (classify_frequency, sec_to_hms)
-├── detector.py           ← 미수신 감지 프로세스
-├── sender.py             ← 슬랙 전송 프로세스
-├── trainer.py            ← 모델 재학습 + BAT_FILE_FREQ_MST MAIN 갱신
-├── llm.py                ← Ollama EXAONE 메시지 생성 (detector에서 호출)
-├── log_utils.py          ← 공통 로그 설정 (날짜별 파일, 포맷 정의)
-├── test_db.py            ← DB 연동 테스트 스크립트
-├── requirements.txt      ← 의존 패키지 목록
-└── sql/
-    ├── detector_sql.py   ← GET_HISTORICAL_DATA, HAS_ALARM_TODAY, INSERT_ALARM,
-    │                        GET_FREQ_MST, UPSERT_FREQ_MST_FB
-    ├── sender_sql.py     ← sender 전용 SQL
-    └── trainer_sql.py    ← GET_TRAINING_DATA, UPSERT_FREQ_MST
+├── .env                     ← 민감 정보 (git 제외)
+├── .env.example             ← 환경변수 템플릿
+├── .dockerignore
+├── .gitignore
+├── requirements.txt         ← 의존 패키지 목록
+├── CLAUDE.md
+├── README.md
+├── src/                     ← Python 소스 전체
+│   ├── config.py            ← .env 로드 및 설정값 관리
+│   ├── freq_utils.py        ← 공통 주기 분류 유틸 (classify_frequency, sec_to_hms)
+│   ├── detector.py          ← 미수신 감지 프로세스
+│   ├── sender.py            ← 슬랙 전송 프로세스
+│   ├── trainer.py           ← 모델 재학습 + BAT_FILE_FREQ_MST MAIN 갱신
+│   ├── llm.py               ← Ollama EXAONE 메시지 생성 (detector에서 호출)
+│   ├── log_utils.py         ← 공통 로그 설정 (날짜별 파일, 포맷 정의)
+│   ├── test_db.py           ← DB 연동 테스트 스크립트
+│   └── sql/
+│       ├── detector_sql.py  ← GET_HISTORICAL_DATA, HAS_ALARM_TODAY, INSERT_ALARM,
+│       │                       GET_FREQ_MST, UPSERT_FREQ_MST_FB
+│       ├── sender_sql.py    ← sender 전용 SQL
+│       └── trainer_sql.py   ← GET_TRAINING_DATA, UPSERT_FREQ_MST
+├── docker/                  ← Docker 관련 파일
+│   ├── Dockerfile
+│   └── docker-compose.yml
+└── sql/                     ← DB DDL
+    └── bat_file_freq_mst.sql
 
 {MODEL_DIR}/              ← 기본: {BASE_DATA_DIR}/models
 ├── {FILE_ID}_iso.pkl
@@ -328,9 +339,9 @@ python3 trainer.py
 ### 6. cron 등록
 
 ```cron
-*/10 * * * * python3 {설치경로}/detector.py
-*/5  * * * * python3 {설치경로}/sender.py
-0 2  * * 0   python3 {설치경로}/trainer.py
+*/10 * * * * python3 {설치경로}/src/detector.py
+*/5  * * * * python3 {설치경로}/src/sender.py
+0 2  * * 0   python3 {설치경로}/src/trainer.py
 ```
 
 > 로그는 각 스크립트가 `{LOG_DIR}` 에 날짜별로 직접 기록합니다.

@@ -20,6 +20,9 @@ __pycache__
 *.pyd
 *.pkl
 
+# DDL only, not needed in image (Python SQL modules are in src/sql/)
+sql/
+
 # Runtime data (should be volumes, not image layers)
 data
 logs

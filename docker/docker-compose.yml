@@ -2,7 +2,9 @@ services:
 
   # ── detector: 10분마다 미수신 감지 ──────────────────────────
   detector:
-    build: .
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
     image: batch-monitor
     container_name: batch-detector
     command: >
@@ -12,7 +14,7 @@ services:
           sleep 600
         done
       "
-    env_file: .env
+    env_file: ../.env
     environment: &common_env
       BASE_DATA_DIR: /data
       ALARM_DIR: /data/batch_alarms
@@ -38,7 +40,7 @@ services:
           sleep 300
         done
       "
-    env_file: .env
+    env_file: ../.env
     environment:
       <<: *common_env
     volumes:
@@ -63,7 +65,7 @@ services:
           sleep 30
         done
       "
-    env_file: .env
+    env_file: ../.env
     environment:
       <<: *common_env
     volumes:

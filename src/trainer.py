@@ -1,6 +1,6 @@
 # ============================================================
 # trainer.py - Isolation Forest 모델 재학습 프로세스
-# cron: 0 2 * * 0 python3 /opt/batch_monitor/trainer.py >> /var/log/trainer.log 2>&1
+# cron: 0 2 * * 0 python3 /opt/batch_monitor/src/trainer.py >> /var/log/trainer.log 2>&1
 # ============================================================
 
 import sys
@@ -13,7 +13,7 @@ import joblib
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
 
-sys.path.insert(0, '/opt/batch_monitor')
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from config import (
     DB_USER, DB_PASSWORD, DB_DSN,
     MODEL_DIR, LOG_DIR, TRAIN_HISTORY_DAYS, MIN_SAMPLE_COUNT, REGR_ID

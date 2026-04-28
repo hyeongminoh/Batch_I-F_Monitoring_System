@@ -1,6 +1,6 @@
 # ============================================================
 # detector.py - 배치 파일 미수신 감지 프로세스
-# cron: */10 * * * * python3 /opt/batch_monitor/detector.py >> /var/log/detector.log 2>&1
+# cron: */10 * * * * python3 /opt/batch_monitor/src/detector.py >> /var/log/detector.log 2>&1
 # ============================================================
 
 import sys
@@ -11,7 +11,7 @@ from datetime import datetime
 import oracledb
 import joblib
 
-sys.path.insert(0, '/opt/batch_monitor')
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from config import (
     DB_USER, DB_PASSWORD, DB_DSN, MBRSH_PGM_ID,
     MODEL_DIR, LOG_DIR, ALARM_DIR_FALLBACK, ALARM_DIR_LLM,
