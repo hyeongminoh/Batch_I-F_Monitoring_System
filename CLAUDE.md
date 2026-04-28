@@ -100,6 +100,7 @@ CREATE TABLE BAT_ALARM_HIS (
     FILE_ID         VARCHAR2(10)    NOT NULL,  -- 파일ID
     ALARM_ID        NUMBER          NOT NULL,  -- 알람ID (SEQ_BAT_ALARM_HIS.NEXTVAL)
     ALARM_DT        DATE,                      -- 알람발생일시
+    FILE_NM         VARCHAR2(40),              -- 알람 시점 기준 가장 최근 수신 파일명
     FREQUENCY_TYPE  VARCHAR2(20),              -- 배치수신주기
     EXP_MIN_TIME    VARCHAR2(8),               -- 예상도착 최솟값 HH24:MI:SS (5th)
     EXP_MED_TIME    VARCHAR2(8),               -- 예상도착 중앙값 HH24:MI:SS (50th)

@@ -10,6 +10,7 @@ GET_EXCLUDED_FILE_IDS = """
 
 GET_HISTORICAL_DATA = """
     SELECT FILE_ID,
+           FILE_NM,
            REG_DT,
            NVL(TOT_REC_CNT, 0)  AS TOT_REC_CNT,
            NVL(SEND_REC_CNT, 0) AS SEND_REC_CNT
@@ -29,14 +30,14 @@ HAS_ALARM_TODAY = """
 
 INSERT_ALARM = """
     INSERT INTO BAT_ALARM_HIS (
-        MBRSH_PGM_ID, FILE_ID,    ALARM_ID,
+        MBRSH_PGM_ID, FILE_ID,    FILE_NM,    ALARM_ID,
         ALARM_DT,     FREQUENCY_TYPE,
         EXP_MIN_TIME, EXP_MED_TIME, EXP_MAX_TIME,
         CHECK_TIME,   DELAY_MIN,    ANOMALY_SCORE,
         ALARM_MSG,    SEND_STS,
         REGR_ID,      REG_DT
     ) VALUES (
-        :mbrsh,     :file_id,   SEQ_BAT_ALARM_HIS.NEXTVAL,
+        :mbrsh,     :file_id,   :file_nm,   SEQ_BAT_ALARM_HIS.NEXTVAL,
         :alarm_dt,  :freq_type,
         :exp_min,   :exp_med,   :exp_max,
         :chk_time,  :delay_min, :anomaly_score,

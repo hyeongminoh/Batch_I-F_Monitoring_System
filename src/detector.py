@@ -60,7 +60,7 @@ def get_historical_data(conn):
     if not rows:
         return pd.DataFrame()
 
-    df = pd.DataFrame(rows, columns=['file_id', 'reg_dt', 'tot_rec_cnt', 'send_rec_cnt'])
+    df = pd.DataFrame(rows, columns=['file_id', 'file_nm', 'reg_dt', 'tot_rec_cnt', 'send_rec_cnt'])
     df['reg_dt']       = pd.to_datetime(df['reg_dt'])
     df['arrival_date'] = df['reg_dt'].dt.date
     df['arrival_sec']  = (df['reg_dt'].dt.hour * 3600
@@ -253,12 +253,13 @@ def generate_alarm_message(file_id, freq_type, window, check_time,
 # ============================================================
 # BAT_ALARM_HIS INSERT
 # ============================================================
-def insert_alarm(conn, file_id, freq_type, window, check_time,
+def insert_alarm(conn, file_id, file_nm, freq_type, window, check_time,
                  delay_min, anomaly_score, alarm_msg, now):
     with conn.cursor() as cur:
         cur.execute(INSERT_ALARM, {
             'mbrsh':         MBRSH_PGM_ID,
             'file_id':       file_id,
+            'file_nm':       file_nm,
             'alarm_dt':      now,
             'freq_type':     freq_type,
             'exp_min':       window['exp_min'],
@@ -318,6 +319,7 @@ def main():
             try:
                 log.info(f"[{file_id}] 점검 시작")
                 file_df = hist_df[hist_df['file_id'] == file_id].copy()
+                file_nm = file_df['file_nm'].iloc[-1]  # 가장 최근 수신 파일명
 
                 # 1. 오늘 이미 도착했으면 스킵
                 if has_arrived_today(file_df, today):
@@ -387,7 +389,7 @@ def main():
 
                 # 9. BAT_ALARM_HIS INSERT
                 insert_alarm(
-                    conn, file_id, freq_type, window, check_time,
+                    conn, file_id, file_nm, freq_type, window, check_time,
                     delay_min, anomaly_score, alarm_msg, now
                 )
                 alarm_cnt += 1
