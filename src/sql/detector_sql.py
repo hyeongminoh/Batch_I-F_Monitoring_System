@@ -25,6 +25,7 @@ HAS_ALARM_TODAY = """
     SELECT COUNT(*)
     FROM   BAT_ALARM_HIS
     WHERE  FILE_ID = :file_id
+      AND  FILE_NM = :file_nm
       AND  TRUNC(ALARM_DT) = TRUNC(SYSDATE)
 """
 

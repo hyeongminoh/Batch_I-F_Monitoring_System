@@ -81,9 +81,9 @@ def has_arrived_today(file_df, today):
 # ============================================================
 # 오늘 이미 알람 발생 여부 확인
 # ============================================================
-def has_alarm_today(conn, file_id):
+def has_alarm_today(conn, file_id, file_nm):
     with conn.cursor() as cur:
-        cur.execute(HAS_ALARM_TODAY, file_id=file_id)
+        cur.execute(HAS_ALARM_TODAY, file_id=file_id, file_nm=file_nm)
         return cur.fetchone()[0] > 0
 
 
@@ -319,7 +319,8 @@ def main():
             try:
                 log.info(f"[{file_id}] 점검 시작")
                 file_df = hist_df[hist_df['file_id'] == file_id].copy()
-                file_nm = file_df['file_nm'].iloc[-1]  # 가장 최근 수신 파일명
+                file_nm_raw = file_df['file_nm'].iloc[-1]  # 가장 최근 수신 파일명
+                file_nm = str(file_nm_raw) if pd.notna(file_nm_raw) else file_id
 
                 # 1. 오늘 이미 도착했으면 스킵
                 if has_arrived_today(file_df, today):
@@ -352,7 +353,7 @@ def main():
                     continue
 
                 # 3. 오늘 이미 알람이 있으면 스킵 (중복 방지)
-                if has_alarm_today(conn, file_id):
+                if has_alarm_today(conn, file_id, file_nm):
                     log.info(f"  [{file_id}] SKIP → 오늘 이미 알람 발송됨 (중복 방지)")
                     continue
 
