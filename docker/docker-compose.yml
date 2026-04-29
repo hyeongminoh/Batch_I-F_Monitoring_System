@@ -1,73 +1,6 @@
 services:
 
-  # ── detector ─────────────────────────────────────────────────
-  detector:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
-    image: batch-monitor
-    container_name: batch-detector
-    command: ["sleep", "infinity"]
-    env_file: ../.env
-    environment: &common_env
-      BASE_DATA_DIR: /data
-      ALARM_DIR: /data/batch_alarms
-      MODEL_DIR: /data/models
-      LOG_DIR: /logs
-      OLLAMA_URL: http://ollama:11434/api/generate
-    volumes:
-      - ../data:/data
-      - ../logs:/logs
-    depends_on:
-      ollama-init:
-        condition: service_completed_successfully
-    restart: unless-stopped
-
-  # ── sender ───────────────────────────────────────────────────
-  sender:
-    image: batch-monitor
-    container_name: batch-sender
-    command: ["sleep", "infinity"]
-    env_file: ../.env
-    environment:
-      <<: *common_env
-    volumes:
-      - ../data:/data
-      - ../logs:/logs
-    depends_on:
-      - detector
-    restart: unless-stopped
-
-  # ── trainer ──────────────────────────────────────────────────
-  trainer:
-    image: batch-monitor
-    container_name: batch-trainer
-    command: ["sleep", "infinity"]
-    env_file: ../.env
-    environment:
-      <<: *common_env
-    volumes:
-      - ../data:/data
-      - ../logs:/logs
-    restart: unless-stopped
-
-  # ── recommender ──────────────────────────────────────────────
-  recommender:
-    image: batch-monitor
-    container_name: batch-recommender
-    command: ["sleep", "infinity"]
-    env_file: ../.env
-    environment:
-      <<: *common_env
-    volumes:
-      - ../data:/data
-      - ../logs:/logs
-    depends_on:
-      ollama-init:
-        condition: service_completed_successfully
-    restart: unless-stopped
-
-  # ── ollama: EXAONE LLM 서빙 ─────────────────────────────────
+  # ── ollama: EXAONE LLM 서빙 (상시 실행) ─────────────────────
   ollama:
     image: ollama/ollama
     container_name: batch-ollama
@@ -82,7 +15,7 @@ services:
       retries: 5
     restart: unless-stopped
 
-  # ── ollama-init: EXAONE 모델 최초 1회 자동 pull 후 종료 ─────
+  # ── ollama-init: EXAONE 모델 최초 1회 자동 pull 후 종료 ──────
   ollama-init:
     image: ollama/ollama
     container_name: batch-ollama-init
@@ -94,5 +27,19 @@ services:
     entrypoint: ["ollama", "pull", "exaone3.5:2.4b"]
     restart: "no"
 
+  # ── app: batch-monitor 이미지 빌드 전용 ──────────────────────
+  # 'docker compose --profile build build' 로만 사용
+  # 실행되지 않음 - 이미지 빌드 목적
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: batch-monitor
+    profiles: ["build"]
+
 volumes:
-  ollama-models: # EXAONE 모델 파일 (재시작해도 재다운로드 불필요)
+  ollama-models:
+
+networks:
+  default:
+    name: batch-monitor
