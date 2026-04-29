@@ -63,6 +63,17 @@
 │  → {FILE_ID}_iso.pkl / {FILE_ID}_scaler.pkl 저장            │
 │  → 수신 주기 분류 → BAT_FILE_FREQ_MST MAIN(T) UPSERT       │
 └─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│                    recommender.py                            │  ← cron 매주 월요일 03:00
+│                                                             │
+│  1. 90일 이력 분석 → 제외 후보 탐지                        │
+│     ├─ IRREGULAR 분류 파일                                  │
+│     └─ 샘플 부족 (< MIN_SAMPLE_COUNT) 파일                 │
+│  2. LLM(EXAONE)으로 한국어 제외 사유 생성                  │
+│  3. BAT_MNTLST_EXC INSERT (USE_YN='P' 추천대기)            │
+│     → 담당자가 'Y'(제외) 또는 'N'(유지)로 최종 결정        │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -134,6 +145,14 @@ features = [
 ]
 ```
 
+### Isolation Forest를 선택한 이유
+
+- **비지도 학습**: 정상/이상 라벨 없이도 학습 가능 (배치 이력 데이터에 라벨이 없음)
+- **가볍다**: 온프레미스 서버에서 무거운 딥러닝 없이도 운영 가능
+- **다변수 처리**: 도착 시각/건수/요일 등 여러 변수를 동시에 반영
+- **설명 가능**: 어떤 시점/패턴이 이상한지 로그로 추적하기 쉬움(점수 기반)
+- **빠른 추론**: 주기적으로 실행해도 부담이 적어 cron/스케줄러에 적합
+
 ### 알람 메시지 생성 (`llm.py`)
 
 detector.py는 알람 발동 시 항상 두 가지 메시지를 모두 생성합니다.
@@ -177,6 +196,15 @@ START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
 | `FB_*` | detector (미등록 FILE_ID 한정) | 90일 | `'D'` |
 | `EFFECTIVE_SRC` | 애플리케이션 | — | T 우선, 없으면 D |
 
+### BAT_MNTLST_EXC USE_YN 흐름
+
+```
+USE_YN
+ ├── 'Y' : 제외 중    ← detector / trainer 가 체크하여 모니터링·학습 제외
+ ├── 'N' : 해제       ← 다시 모니터링 대상
+ └── 'P' : 추천대기  ← recommender 가 INSERT, 담당자 검토 후 Y/N 결정
+```
+
 ### SEND_STS 흐름
 
 ```
@@ -198,24 +226,28 @@ INSERT → '0' (대기)  →  '1' (전송 완료)
 ├── CLAUDE.md
 ├── README.md
 ├── src/                     ← Python 소스 전체
-│   ├── config.py            ← .env 로드 및 설정값 관리
+│   ├── config.py            ← .env 로드 및 설정값 관리 (USE_LLM 포함)
 │   ├── freq_utils.py        ← 공통 주기 분류 유틸 (classify_frequency, sec_to_hms)
 │   ├── detector.py          ← 미수신 감지 프로세스
 │   ├── sender.py            ← 슬랙 전송 프로세스
 │   ├── trainer.py           ← 모델 재학습 + BAT_FILE_FREQ_MST MAIN 갱신
-│   ├── llm.py               ← Ollama EXAONE 메시지 생성 (detector에서 호출)
+│   ├── recommender.py       ← 모니터링 제외 파일 자동 추천 (USE_YN='P')
+│   ├── llm.py               ← Ollama EXAONE 메시지 생성
 │   ├── log_utils.py         ← 공통 로그 설정 (날짜별 파일, 포맷 정의)
 │   ├── test_db.py           ← DB 연동 테스트 스크립트
 │   └── sql/
-│       ├── detector_sql.py  ← GET_HISTORICAL_DATA, HAS_ALARM_TODAY, INSERT_ALARM,
-│       │                       GET_FREQ_MST, UPSERT_FREQ_MST_FB
-│       ├── sender_sql.py    ← sender 전용 SQL
-│       └── trainer_sql.py   ← GET_TRAINING_DATA, UPSERT_FREQ_MST
+│       ├── detector_sql.py    ← detector 전용 SQL
+│       ├── sender_sql.py      ← sender 전용 SQL
+│       ├── trainer_sql.py     ← trainer 전용 SQL
+│       └── recommender_sql.py ← recommender 전용 SQL
 ├── docker/                  ← Docker 관련 파일
 │   ├── Dockerfile
 │   └── docker-compose.yml
-└── sql/                     ← DB DDL
-    └── bat_file_freq_mst.sql
+└── table_sql/               ← DB DDL (테이블·시퀀스 생성 스크립트)
+    ├── bat_alarm_his.sql
+    ├── bat_file_freq_mst.sql
+    ├── bat_mntlsth_exc.sql
+    └── seq_bat_alarm_his.sql
 
 {MODEL_DIR}/              ← 기본: {BASE_DATA_DIR}/models
 ├── {FILE_ID}_iso.pkl
@@ -232,6 +264,7 @@ INSERT → '0' (대기)  →  '1' (전송 완료)
 ├── detector_YYYYMMDD.log
 ├── sender_YYYYMMDD.log
 ├── trainer_YYYYMMDD.log
+├── recommender_YYYYMMDD.log
 └── test_db_YYYYMMDD.log
 ```
 
@@ -342,7 +375,10 @@ python3 trainer.py
 */10 * * * * python3 {설치경로}/src/detector.py
 */5  * * * * python3 {설치경로}/src/sender.py
 0 2  * * 0   python3 {설치경로}/src/trainer.py
+0 3  * * 1   python3 {설치경로}/src/recommender.py
 ```
+
+> recommender.py 실행 후 `BAT_MNTLST_EXC`에서 `USE_YN='P'` 레코드를 검토하여 `'Y'`(제외) 또는 `'N'`(유지)으로 직접 업데이트합니다.
 
 > 로그는 각 스크립트가 `{LOG_DIR}` 에 날짜별로 직접 기록합니다.
 

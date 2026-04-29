@@ -24,7 +24,7 @@ RUN pip install -r requirements.txt
 
 # 소스 복사 (src/ → /app/)
 COPY src/config.py src/detector.py src/sender.py src/trainer.py \
-     src/llm.py src/log_utils.py src/freq_utils.py ./
+     src/recommender.py src/llm.py src/log_utils.py src/freq_utils.py ./
 COPY src/sql/ ./sql/
 
 # 데이터/로그 디렉토리 생성
