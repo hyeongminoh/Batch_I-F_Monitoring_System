@@ -51,6 +51,22 @@ services:
       - ../logs:/logs
     restart: unless-stopped
 
+  # ── recommender ──────────────────────────────────────────────
+  recommender:
+    image: batch-monitor
+    container_name: batch-recommender
+    command: ["sleep", "infinity"]
+    env_file: ../.env
+    environment:
+      <<: *common_env
+    volumes:
+      - ../data:/data
+      - ../logs:/logs
+    depends_on:
+      ollama-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
   # ── ollama: EXAONE LLM 서빙 ─────────────────────────────────
   ollama:
     image: ollama/ollama
