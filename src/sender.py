@@ -12,8 +12,10 @@ import oracledb
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from config import (
     DB_USER, DB_PASSWORD, DB_DSN,
-    SLACK_CHANNEL, SLACK_SCRIPT, ALARM_DIR, LOG_DIR, REGR_ID
+    SLACK_CHANNEL, SLACK_SCRIPT, ALARM_DIR, ALARM_DIR_LLM, LOG_DIR, REGR_ID,
+    USE_LLM, OLLAMA_URL, OLLAMA_MODEL, OLLAMA_TIMEOUT,
 )
+import llm as llm_module
 from log_utils import setup_logger
 from sql.sender_sql import (
     GET_PENDING_ALARMS,
@@ -41,18 +43,41 @@ def get_pending_alarms(conn):
 
 
 # ============================================================
-# 알람 txt 파일 생성
+# 알람 txt 파일 (DB 원문 / LLM 재작성) — 병행 저장
 # ============================================================
-def create_alarm_file(file_id, alarm_msg, now):
-    os.makedirs(ALARM_DIR, exist_ok=True)
-    ts       = now.strftime("%Y%m%d_%H%M%S")
-    filename = f"ALARM_{file_id}_{ts}.txt"
-    filepath = os.path.join(ALARM_DIR, filename)
-
+def write_alarm_text(directory, file_id, ts, suffix, content):
+    os.makedirs(directory, exist_ok=True)
+    filename = f"ALARM_{file_id}_{ts}_{suffix}.txt"
+    filepath = os.path.join(directory, filename)
     with open(filepath, 'w', encoding='utf-8') as f:
-        f.write(alarm_msg)
-
+        f.write(content)
     return filepath
+
+
+def prepare_alarm_files(file_id, alarm_msg, now):
+    """
+    1) DB 원문 → ALARM_DIR … _src.txt
+    2) USE_LLM 시 LLM 재작성 → ALARM_DIR_LLM … _llm.txt (실패 시 생략)
+    반환: (슬랙에 넘길 경로, src 경로, llm 경로 또는 None)
+    """
+    ts = now.strftime("%Y%m%d_%H%M%S")
+    src_path = write_alarm_text(ALARM_DIR, file_id, ts, "src", alarm_msg)
+
+    llm_path = None
+    if USE_LLM:
+        llm_msg, ok = llm_module.generate_sender(
+            file_id, alarm_msg, OLLAMA_URL, OLLAMA_MODEL, OLLAMA_TIMEOUT,
+        )
+        if ok and llm_msg:
+            llm_path = write_alarm_text(ALARM_DIR_LLM, file_id, ts, "llm", llm_msg)
+            log.info(f"  [{file_id}] LLM 전송문 생성 → {llm_path}")
+        else:
+            log.info(f"  [{file_id}] LLM 스킵/실패 → DB 원문 파일로 전송 ({src_path})")
+
+    # mon_slack.sh 등은 경로 1개만 받는 경우가 많아, 전송본 파일 하나만 지정
+    slack_path = llm_path if llm_path else src_path
+
+    return slack_path, src_path, llm_path
 
 
 # ============================================================
@@ -116,15 +141,21 @@ def main():
         for alarm_id, file_id, alarm_msg in pending:
             now = datetime.now()
             try:
-                # 1. 알람 txt 파일 생성
-                filepath = create_alarm_file(file_id, alarm_msg, now)
-                log.info(f"[{alarm_id}] {file_id}: 파일 생성 → {filepath}")
+                # 1. DB 원문 txt + (옵션) LLM txt 병행 생성 → 슬랙용 경로 결정
+                slack_path, src_path, llm_path = prepare_alarm_files(
+                    file_id, alarm_msg, now
+                )
+                log.info(
+                    f"[{alarm_id}] {file_id}: src={src_path}"
+                    + (f", llm={llm_path}" if llm_path else "")
+                    + f", slack={slack_path}"
+                )
 
                 # 2. 슬랙 전송 (mon_slack.sh 미설치 환경에서는 주석 처리)
-                # send_slack(filepath)
+                # send_slack(slack_path)
 
                 # 3. 성공 처리
-                update_success(conn, alarm_id, filepath, now)
+                update_success(conn, alarm_id, slack_path, now)
                 log.info(f"[{alarm_id}] {file_id}: 슬랙 전송 완료")
                 success_cnt += 1
 

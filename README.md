@@ -51,9 +51,11 @@
 │                       sender.py                              │  ← cron 5분마다
 │                                                             │
 │  1. 대기 알람 조회 (BAT_ALARM_HIS SEND_STS='0')             │
-│  2. ALARM_*.txt 파일 생성                                   │
-│  3. mon_slack.sh 실행                                       │
-│  4. SEND_STS 업데이트 (1=완료 / 9=실패)                     │
+│  2. DB 원문 → ALARM_DIR/…_src.txt 저장 (항상)              │
+│  3. (USE_LLM=1) LLM으로 슬랙용 문구 재작성                  │
+│     └─ 성공 → ALARM_DIR_LLM/…_llm.txt / 실패 → src 사용    │
+│  4. mon_slack.sh 실행 (llm 성공 시 llm 경로, 아니면 src)    │
+│  5. SEND_STS 업데이트 (1=완료 / 9=실패)                     │
 └─────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
@@ -155,16 +157,26 @@ features = [
 
 ### 알람 메시지 생성 (`llm.py`)
 
-detector.py는 알람 발동 시 항상 두 가지 메시지를 모두 생성합니다.
+`llm.py`는 detector와 sender 두 곳에서 사용됩니다.
+
+**detector (알람 감지 시)**
 
 ```
-1. fallback 템플릿 메시지  → batch_alarms/fallback/ 저장
-2. LLM(EXAONE) 메시지     → batch_alarms/llm/ 저장 (Ollama 연결 시)
+1. fallback 템플릿 메시지  → ALARM_DIR/fallback/…_fallback.txt 저장
+2. LLM(EXAONE) 메시지     → ALARM_DIR/llm/…_llm.txt 저장 (Ollama 연결 시)
 
-최종 슬랙 전송 메시지: LLM 성공 시 LLM 메시지, 실패 시 fallback
+BAT_ALARM_HIS.ALARM_MSG: LLM 성공 시 LLM 메시지, 실패 시 fallback 저장
 ```
 
-**fallback 메시지 형식:**
+**sender (슬랙 전송 시)**
+
+```
+DB의 ALARM_MSG 원문을 슬랙에 보내기 좋게 LLM이 재작성
+  → 성공: ALARM_DIR_LLM/…_llm.txt 로 전송
+  → 실패: ALARM_DIR/…_src.txt (DB 원문) 로 전송
+```
+
+**fallback 메시지 형식 (detector):**
 ```
 [배치 미수신 알람] EB140402
 마감: 09:07:36 / 지연: 134분 / 주기: DAILY
@@ -254,11 +266,11 @@ INSERT → '0' (대기)  →  '1' (전송 완료)
 └── {FILE_ID}_scaler.pkl
 
 {ALARM_DIR}/              ← 기본: {BASE_DATA_DIR}/batch_alarms
-├── ALARM_{FILE_ID}_{YYYYMMDD_HHMMSS}.txt   ← 슬랙 전송용 (sender.py 생성)
+├── ALARM_{FILE_ID}_{YYYYMMDD_HHMMSS}_src.txt  ← DB 원문 (sender.py, 항상 생성)
 ├── fallback/
-│   └── ALARM_{FILE_ID}_{YYYYMMDD_HHMMSS}.txt  ← 템플릿 메시지 비교용
+│   └── ALARM_{FILE_ID}_{YYYYMMDD_HHMMSS}.txt  ← detector fallback 템플릿 비교용
 └── llm/
-    └── ALARM_{FILE_ID}_{YYYYMMDD_HHMMSS}.txt  ← LLM 메시지 비교용
+    └── ALARM_{FILE_ID}_{YYYYMMDD_HHMMSS}_llm.txt  ← sender LLM 재작성 슬랙 전송본
 
 {LOG_DIR}/                ← 기본: {BASE_DATA_DIR}/logs
 ├── detector_YYYYMMDD.log
@@ -348,10 +360,17 @@ SLACK_CHANNEL=your_slack_channel
 SLACK_SCRIPT=/path/to/mon_slack.sh
 
 # 경로 (절대경로 권장)
+# ALARM_DIR / MODEL_DIR / LOG_DIR 미설정 시 BASE_DATA_DIR 하위 기본값 사용
 BASE_DATA_DIR=/data/batch_monitoring_system
 ALARM_DIR=/data/batch_monitoring_system/batch_alarms
 MODEL_DIR=/data/batch_monitoring_system/models
 LOG_DIR=/data/batch_monitoring_system/logs
+
+# LLM (Ollama) — 선택사항, 기본값 사용 시 생략 가능
+USE_LLM=1                                      # 0 으로 설정하면 LLM 비활성화
+OLLAMA_URL=http://localhost:11434/api/generate
+OLLAMA_MODEL=exaone3.5:2.4b
+OLLAMA_TIMEOUT=60
 ```
 
 ### 4. DB 연동 확인

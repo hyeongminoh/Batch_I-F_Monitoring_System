@@ -5,6 +5,7 @@ CLAUDE.md
 
 # Secrets (never send to build context)
 .env
+.env.docker
 .env.*
 !.env.example
 *.pem

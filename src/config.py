@@ -67,9 +67,9 @@ LOG_DIR            = os.environ.get('LOG_DIR',   os.path.join(BASE_DATA_DIR, 'lo
 # Ollama에 모델 등록 시 사용한 이름으로 변경 필요
 # 예: ollama create exaone3.5:2.4b -f Modelfile
 USE_LLM        = os.environ.get('USE_LLM', '1') not in ('0', 'false', 'False', 'FALSE')
-OLLAMA_URL     = "http://localhost:11434/api/generate"
-OLLAMA_MODEL   = "exaone3.5:2.4b"
-OLLAMA_TIMEOUT = 60  # 초
+OLLAMA_URL     = os.environ.get('OLLAMA_URL', 'http://localhost:11434/api/generate')
+OLLAMA_MODEL   = os.environ.get('OLLAMA_MODEL', 'exaone3.5:2.4b')
+OLLAMA_TIMEOUT = int(os.environ.get('OLLAMA_TIMEOUT', '60'))
 
 # ============================================================
 # 모니터링 파라미터

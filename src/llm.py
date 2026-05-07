@@ -53,3 +53,40 @@ def generate(file_id, freq_type, window, check_time, delay_min, anomaly_score, t
         log.warning(f"  [{file_id}] LLM 호출 실패: {e}")
 
     return None, False
+
+
+def build_sender_prompt(file_id, alarm_msg):
+    """sender용: DB에 저장된 알람 원문을 슬랙 전송 문구로 다듬기."""
+    body = (alarm_msg or "").strip()
+    if len(body) > 8000:
+        body = body[:8000] + "\n…(이하 생략)"
+    return (
+        "다음은 배치 미수신 알람의 DB 저장 원문입니다. "
+        "슬랙에 보내기 좋게 한국어로 정리하되, 파일ID·지연·마감 등 핵심 수치는 빠지지 않게 하세요.\n\n"
+        f"- 파일ID: {file_id}\n\n"
+        f"원문:\n{body}\n\n"
+        "슬랙용 메시지(한 덩어리):"
+    )
+
+
+def generate_sender(file_id, alarm_msg, ollama_url, ollama_model, ollama_timeout):
+    """
+    sender 전용 LLM. 성공 시 (문자열, True), 실패 시 (None, False).
+    """
+    log = logging.getLogger("sender")
+    prompt = build_sender_prompt(file_id, alarm_msg)
+    try:
+        log.info(f"  [{file_id}] (sender) LLM 호출 중 ({ollama_model}) ...")
+        resp = requests.post(
+            ollama_url,
+            json={"model": ollama_model, "prompt": prompt, "stream": False},
+            timeout=ollama_timeout,
+        )
+        if resp.status_code == 200:
+            msg = resp.json().get("response", "").strip()
+            if msg:
+                return msg, True
+        log.warning(f"  [{file_id}] (sender) LLM 응답 비정상 (status={resp.status_code})")
+    except Exception as e:
+        log.warning(f"  [{file_id}] (sender) LLM 호출 실패: {e}")
+    return None, False

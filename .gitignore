@@ -12,6 +12,7 @@ env/
 
 # Local environment and secrets
 .env
+.env.docker
 .env.*
 !.env.example
 *.pem
@@ -33,3 +34,11 @@ docker-compose.override.yml
 
 # Claude Code internal directory
 .claude/
+
+# IDE / editor configs
+.cursorignore
+.cursor/
+.vscode/
+
+# Local dev scripts (PC 경로 포함)
+docker_run.txt
