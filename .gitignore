@@ -43,5 +43,6 @@ docker-compose.override.yml
 # Local dev scripts (PC 경로 포함)
 docker_run.txt
 
-# DB DDL (테이블 생성 스크립트 — 로컬 전용)
+# DB DDL (테이블 생성·변경 스크립트 — 로컬 전용)
 table_sql/
+sql/
