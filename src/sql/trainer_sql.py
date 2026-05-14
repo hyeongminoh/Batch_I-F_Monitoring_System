@@ -28,32 +28,35 @@ UPSERT_FREQ_MST = """
     ON (dst.FILE_ID = :file_id)
     WHEN MATCHED THEN
         UPDATE SET
-            MAIN_FREQ_TYPE   = :freq_type,
-            MAIN_MEDIAN_GAP  = :median_gap,
-            MAIN_STD_GAP     = :std_gap,
-            MAIN_ROUND_GAP   = :round_gap,
-            MAIN_SAMPLE_CNT  = :sample_cnt,
-            MAIN_WIN_DAYS    = :win_days,
-            MAIN_ANALYSIS_ST = :analysis_st,
-            MAIN_ANALYSIS_ED = :analysis_ed,
-            MAIN_UPD_DT      = SYSDATE,
-            MAIN_REGR_ID     = :regr_id,
-            EFFECTIVE_SRC    = 'T',
-            EFFECTIVE_UPD_DT = SYSDATE,
-            UPDR_ID          = :regr_id,
-            UPD_DT           = SYSDATE
+            MAIN_FREQ_TYPE    = :freq_type,
+            MAIN_MEDIAN_GAP   = :median_gap,
+            MAIN_STD_GAP      = :std_gap,
+            MAIN_ROUND_GAP    = :round_gap,
+            MAIN_SAMPLE_CNT   = :sample_cnt,
+            MAIN_DOM_PATTERN  = :dom_pattern,
+            MAIN_WIN_DAYS     = :win_days,
+            MAIN_ANALYSIS_ST  = :analysis_st,
+            MAIN_ANALYSIS_ED  = :analysis_ed,
+            MAIN_UPD_DT       = SYSDATE,
+            MAIN_REGR_ID      = :regr_id,
+            EFFECTIVE_SRC     = 'T',
+            EFFECTIVE_UPD_DT  = SYSDATE,
+            UPDR_ID           = :regr_id,
+            UPD_DT            = SYSDATE
     WHEN NOT MATCHED THEN
         INSERT (
             FILE_ID,
             MAIN_FREQ_TYPE, MAIN_MEDIAN_GAP, MAIN_STD_GAP, MAIN_ROUND_GAP,
-            MAIN_SAMPLE_CNT, MAIN_WIN_DAYS, MAIN_ANALYSIS_ST, MAIN_ANALYSIS_ED,
+            MAIN_SAMPLE_CNT, MAIN_DOM_PATTERN, MAIN_WIN_DAYS,
+            MAIN_ANALYSIS_ST, MAIN_ANALYSIS_ED,
             MAIN_UPD_DT, MAIN_REGR_ID,
             EFFECTIVE_SRC, EFFECTIVE_UPD_DT,
             REGR_ID, REG_DT, UPD_DT
         ) VALUES (
             :file_id,
             :freq_type, :median_gap, :std_gap, :round_gap,
-            :sample_cnt, :win_days, :analysis_st, :analysis_ed,
+            :sample_cnt, :dom_pattern, :win_days,
+            :analysis_st, :analysis_ed,
             SYSDATE, :regr_id,
             'T', SYSDATE,
             :regr_id, SYSDATE, SYSDATE

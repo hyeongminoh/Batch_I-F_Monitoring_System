@@ -19,7 +19,7 @@ from config import (
     MODEL_DIR, LOG_DIR, TRAIN_HISTORY_DAYS, MIN_SAMPLE_COUNT, REGR_ID
 )
 from log_utils import setup_logger
-from freq_utils import classify_frequency
+from freq_utils import classify_frequency, detect_dom_pattern
 from sql.trainer_sql import (
     GET_EXCLUDED_FILE_IDS,
     GET_TRAINING_DATA,
@@ -64,6 +64,7 @@ def get_training_data(conn):
                           + df['reg_dt'].dt.second)
     df['weekday']      = df['reg_dt'].dt.weekday        # 0=월 ~ 6=일
     df['is_month_end'] = (df['reg_dt'].dt.day >= 25).astype(int)
+    df['day_of_month'] = df['reg_dt'].dt.day
     return df
 
 
@@ -72,10 +73,10 @@ def get_training_data(conn):
 # ============================================================
 def train_model(file_df):
     """
-    피처: [arrival_sec, tot_rec_cnt, send_rec_cnt, weekday, is_month_end]
+    피처: [arrival_sec, tot_rec_cnt, send_rec_cnt, weekday, is_month_end, day_of_month]
     StandardScaler 정규화 후 IsolationForest 학습
     """
-    feature_cols = ['arrival_sec', 'tot_rec_cnt', 'send_rec_cnt', 'weekday', 'is_month_end']
+    feature_cols = ['arrival_sec', 'tot_rec_cnt', 'send_rec_cnt', 'weekday', 'is_month_end', 'day_of_month']
     X = file_df[feature_cols].values
 
     scaler   = StandardScaler()
@@ -94,7 +95,8 @@ def train_model(file_df):
 # ============================================================
 # BAT_FILE_FREQ_MST UPSERT (MAIN)
 # ============================================================
-def upsert_freq_mst(conn, file_id, freq_type, median_gap, std_gap, sample_cnt, file_df):
+def upsert_freq_mst(conn, file_id, freq_type, median_gap, std_gap, sample_cnt,
+                    dom_pattern, file_df):
     with conn.cursor() as cur:
         cur.execute(UPSERT_FREQ_MST, {
             'file_id':     file_id,
@@ -103,6 +105,7 @@ def upsert_freq_mst(conn, file_id, freq_type, median_gap, std_gap, sample_cnt, f
             'std_gap':     round(std_gap, 4),
             'round_gap':   round(median_gap),
             'sample_cnt':  sample_cnt,
+            'dom_pattern': dom_pattern,
             'win_days':    TRAIN_HISTORY_DAYS,
             'analysis_st': file_df['reg_dt'].min().to_pydatetime(),
             'analysis_ed': file_df['reg_dt'].max().to_pydatetime(),
@@ -165,11 +168,14 @@ def main():
                 iso_path, _ = save_models(file_id, iso, scaler)
 
                 freq_type, median_gap, std_gap = classify_frequency(file_df)
+                round_gap   = round(median_gap)
+                dom_pattern = detect_dom_pattern(file_df, freq_type, round_gap)
                 upsert_freq_mst(conn, file_id, freq_type, median_gap, std_gap,
-                                len(file_df), file_df)
+                                len(file_df), dom_pattern, file_df)
 
+                dom_info = f", 월중패턴={dom_pattern}" if dom_pattern else ""
                 log.info(f"{file_id}: 학습 완료 (샘플={len(file_df)}건, "
-                         f"주기={freq_type}) → {iso_path}")
+                         f"주기={freq_type}{dom_info}) → {iso_path}")
                 success_cnt += 1
 
             except Exception as e:

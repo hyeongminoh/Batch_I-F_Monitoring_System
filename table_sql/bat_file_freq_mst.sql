@@ -43,6 +43,12 @@ CREATE TABLE BAT_FILE_FREQ_MST (
     FB_UPD_DT           DATE,                       -- detector 마지막 fallback 일시
     FB_REGR_ID          VARCHAR2(8),
 
+    -- ── [DOM_PATTERN] 월중 수신일 패턴 ───────────────────
+    -- EVERY_N_DAYS / MONTHLY 파일에서만 탐지. 쉼표 구분 day_of_month 목록.
+    -- 예: 매월 5일·15일 수신 → "5,15"
+    MAIN_DOM_PATTERN    VARCHAR2(200),
+    FB_DOM_PATTERN      VARCHAR2(200),
+
     -- ── [EFFECTIVE] 알람·메시지에 사용 중인 출처 ─────────
     -- T=trainer(MAIN_*), D=detector(FB_*)
     EFFECTIVE_SRC       CHAR(1),

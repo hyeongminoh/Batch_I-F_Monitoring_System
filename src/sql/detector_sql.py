@@ -24,24 +24,24 @@ GET_HISTORICAL_DATA = """
 HAS_ALARM_TODAY = """
     SELECT COUNT(*)
     FROM   BAT_ALARM_HIS
-    WHERE  FILE_ID = :file_id
-      AND  FILE_NM = :file_nm
+    WHERE  FILE_ID    = :file_id
+      AND  ALARM_TYPE = :alarm_type
       AND  TRUNC(ALARM_DT) = TRUNC(SYSDATE)
 """
 
 INSERT_ALARM = """
     INSERT INTO BAT_ALARM_HIS (
         MBRSH_PGM_ID, FILE_ID,    FILE_NM,    ALARM_ID,
-        ALARM_DT,     FREQUENCY_TYPE,
+        ALARM_DT,     ALARM_TYPE, FREQUENCY_TYPE,
         EXP_MIN_TIME, EXP_MED_TIME, EXP_MAX_TIME,
         CHECK_TIME,   DELAY_MIN,    ANOMALY_SCORE,
         ALARM_MSG,    SEND_STS,
         REGR_ID,      REG_DT
     ) VALUES (
-        :mbrsh,     :file_id,   :file_nm,   SEQ_BAT_ALARM_HIS.NEXTVAL,
-        :alarm_dt,  :freq_type,
-        :exp_min,   :exp_med,   :exp_max,
-        :chk_time,  :delay_min, :anomaly_score,
+        :mbrsh,     :file_id,    :file_nm,   SEQ_BAT_ALARM_HIS.NEXTVAL,
+        :alarm_dt,  :alarm_type, :freq_type,
+        :exp_min,   :exp_med,    :exp_max,
+        :chk_time,  :delay_min,  :anomaly_score,
         :alarm_msg, '0',
         :regr_id,   SYSDATE
     )
@@ -52,10 +52,11 @@ INSERT_ALARM = """
 GET_FREQ_MST = """
     SELECT FILE_ID,
            EFFECTIVE_SRC,
-           CASE WHEN EFFECTIVE_SRC = 'T' THEN MAIN_FREQ_TYPE ELSE FB_FREQ_TYPE END AS FREQ_TYPE,
-           CASE WHEN EFFECTIVE_SRC = 'T' THEN MAIN_MEDIAN_GAP ELSE FB_MEDIAN_GAP END AS MEDIAN_GAP,
-           CASE WHEN EFFECTIVE_SRC = 'T' THEN MAIN_STD_GAP ELSE FB_STD_GAP END AS STD_GAP,
-           CASE WHEN EFFECTIVE_SRC = 'T' THEN MAIN_ROUND_GAP ELSE FB_ROUND_GAP END AS ROUND_GAP
+           CASE WHEN EFFECTIVE_SRC = 'T' THEN MAIN_FREQ_TYPE    ELSE FB_FREQ_TYPE    END AS FREQ_TYPE,
+           CASE WHEN EFFECTIVE_SRC = 'T' THEN MAIN_MEDIAN_GAP   ELSE FB_MEDIAN_GAP   END AS MEDIAN_GAP,
+           CASE WHEN EFFECTIVE_SRC = 'T' THEN MAIN_STD_GAP      ELSE FB_STD_GAP      END AS STD_GAP,
+           CASE WHEN EFFECTIVE_SRC = 'T' THEN MAIN_ROUND_GAP    ELSE FB_ROUND_GAP    END AS ROUND_GAP,
+           CASE WHEN EFFECTIVE_SRC = 'T' THEN MAIN_DOM_PATTERN  ELSE FB_DOM_PATTERN  END AS DOM_PATTERN
     FROM BAT_FILE_FREQ_MST
     WHERE EFFECTIVE_SRC IS NOT NULL
 """
@@ -72,6 +73,7 @@ UPSERT_FREQ_MST_FB = """
             FB_MEDIAN_GAP    = :median_gap,
             FB_STD_GAP       = :std_gap,
             FB_ROUND_GAP     = :round_gap,
+            FB_DOM_PATTERN   = :dom_pattern,
             FB_SAMPLE_CNT    = :sample_cnt,
             FB_WIN_DAYS      = :win_days,
             FB_ANALYSIS_ST   = :analysis_st,
@@ -87,14 +89,16 @@ UPSERT_FREQ_MST_FB = """
         INSERT (
             FILE_ID,
             FB_FREQ_TYPE, FB_MEDIAN_GAP, FB_STD_GAP, FB_ROUND_GAP,
-            FB_SAMPLE_CNT, FB_WIN_DAYS, FB_ANALYSIS_ST, FB_ANALYSIS_ED,
+            FB_DOM_PATTERN, FB_SAMPLE_CNT, FB_WIN_DAYS,
+            FB_ANALYSIS_ST, FB_ANALYSIS_ED,
             FB_UPD_DT, FB_REGR_ID,
             EFFECTIVE_SRC, EFFECTIVE_UPD_DT,
             REGR_ID, REG_DT, UPD_DT
         ) VALUES (
             :file_id,
             :freq_type, :median_gap, :std_gap, :round_gap,
-            :sample_cnt, :win_days, :analysis_st, :analysis_ed,
+            :dom_pattern, :sample_cnt, :win_days,
+            :analysis_st, :analysis_ed,
             SYSDATE, :regr_id,
             'D', SYSDATE,
             :regr_id, SYSDATE, SYSDATE

@@ -74,9 +74,10 @@ OLLAMA_TIMEOUT = int(os.environ.get('OLLAMA_TIMEOUT', '60'))
 # ============================================================
 # 모니터링 파라미터
 # ============================================================
-HISTORY_DAYS       = 90    # detector 조회 기간 (일)
-TRAIN_HISTORY_DAYS = 180   # trainer 학습 기간 (일)
-MIN_SAMPLE_COUNT   = 3     # 알람 발동 최소 샘플 수 (미만이면 알람 제외)
+HISTORY_DAYS            = 90    # detector 조회 기간 (일)
+TRAIN_HISTORY_DAYS      = 180   # trainer 학습 기간 (일)
+MIN_SAMPLE_COUNT        = 3     # 알람 발동 최소 샘플 수 (미만이면 알람 제외)
+VOLUME_ZSCORE_THRESHOLD = float(os.environ.get('VOLUME_ZSCORE_THRESHOLD', '3.0'))  # 건수 이상 탐지 Z-score 임계값
 
 # ============================================================
 # 공통 메타 정보
