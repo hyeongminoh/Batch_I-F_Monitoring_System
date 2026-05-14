@@ -23,6 +23,7 @@ __pycache__
 
 # DDL only, not needed in image (Python SQL modules are in src/sql/)
 sql/
+table_sql/
 
 # Runtime data (should be volumes, not image layers)
 data
