@@ -1,6 +1,25 @@
 # ============================================================
 # llm.py - Ollama EXAONE 한국어 알람 메시지 생성
 # ============================================================
+"""
+로컬 Ollama 서버에 띄워진 EXAONE 2.4B 모델을 호출해 한국어 알람 메시지를 생성한다.
+외부 인터넷 없이 망분리 환경 내에서만 동작한다.
+
+[함수 구성]
+  generate()        : detector 전용. 미수신 감지 시 BAT_ALARM_HIS.ALARM_MSG에 저장할 문구 생성.
+  generate_sender() : sender 전용.  DB 원문을 슬랙 전송에 적합한 문체로 재작성.
+
+[호출 흐름]
+  detector.py → generate()        → Ollama POST /api/generate → 한국어 알람 메시지
+  sender.py   → generate_sender() → Ollama POST /api/generate → 슬랙용 재작성 문구
+
+[실패 처리]
+  Ollama 미실행·타임아웃·응답 비정상 모두 (None, False) 반환.
+  호출 측에서 fallback 메시지로 대체하므로 예외를 밖으로 전파하지 않는다.
+
+[환경 변수]
+  USE_LLM=0 으로 설정하면 이 모듈 자체를 호출하지 않음 (config.py에서 제어).
+"""
 
 import logging
 import requests
@@ -10,6 +29,7 @@ log = logging.getLogger('detector')
 
 
 def build_prompt(file_id, freq_type, window, check_time, delay_min, anomaly_score, today):
+    """미수신 상황 정보를 담은 EXAONE용 프롬프트 문자열을 생성한다."""
     is_month_end = today.day >= 25
     return (
         f"다음 배치 파일 미수신 상황에 대한 한국어 알람 메시지를 아래 형식으로 작성하세요.\n\n"

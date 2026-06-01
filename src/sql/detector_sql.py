@@ -1,5 +1,19 @@
 """
-detector.py 에서 사용하는 SQL 모음
+detector.py 전용 SQL 상수 모음.
+
+[상수 목록]
+  GET_EXCLUDED_FILE_IDS   : BAT_MNTLST_EXC에서 USE_YN='Y' 제외 파일 조회
+  GET_HISTORICAL_DATA     : COM_BATFILE_TRN에서 모든 파일의 최근 N일 수신 이력 조회
+  HAS_ALARM_TODAY         : 특정 파일의 오늘 알람 발생 여부 확인 (파일별 개별 쿼리)
+  INSERT_ALARM            : BAT_ALARM_HIS에 M/V 알람 신규 등록
+  GET_FREQ_MST            : BAT_FILE_FREQ_MST에서 수신 주기 프로필 전체 조회
+                            EFFECTIVE_SRC 기준으로 MAIN(T) 또는 FB(D) 컬럼 선택 반환
+  UPSERT_FREQ_MST_FB      : BAT_FILE_FREQ_MST 미등록 파일의 fallback 주기를 FB_* 컬럼에 기록
+                            MAIN_FREQ_TYPE이 이미 있으면(trainer 분석 완료) UPDATE 건너뜀
+
+[detector_detail.py 와의 차이]
+  - GET_HISTORICAL_DATA: FILE_ID 필터 없이 전체 조회 (detector_detail_sql.py는 IN 절 필터)
+  - HAS_ALARM_TODAY: 파일별 개별 쿼리 (detector_detail_sql.py는 GET_ALARMS_TODAY로 대체)
 """
 
 GET_EXCLUDED_FILE_IDS = """

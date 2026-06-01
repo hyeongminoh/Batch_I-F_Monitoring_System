@@ -2,6 +2,41 @@
 # trainer.py - Isolation Forest 모델 재학습 프로세스
 # cron: 0 2 * * 0 python3 /opt/batch_monitor/src/trainer.py >> /var/log/trainer.log 2>&1
 # ============================================================
+"""
+매주 일요일 02:00에 실행되어 FILE_ID별 이상 탐지 모델을 재학습하고
+수신 주기 프로필(BAT_FILE_FREQ_MST)을 갱신하는 주간 배치 프로세스.
+
+[처리 흐름]
+  1. BAT_MNTLST_EXC에서 USE_YN='Y' 제외 FILE_ID 조회
+  2. COM_BATFILE_TRN에서 최근 180일 수신 이력 조회
+  3. FILE_ID별로 아래 작업 수행:
+     a. 샘플 부족(MIN_SAMPLE_COUNT 미만) → 스킵
+     b. Isolation Forest 학습 (피처 6개)
+        → {MODEL_DIR}/{FILE_ID}_iso.pkl, _scaler.pkl 저장
+     c. 수신 주기 분류 (classify_frequency)
+        → DAILY / WEEKLY / MONTHLY / EVERY_N_DAYS / IRREGULAR
+     d. 월중 수신일 패턴 탐지 (detect_dom_pattern)
+        → EVERY_N_DAYS / MONTHLY 파일만. 예: "5,15"
+     e. BAT_FILE_FREQ_MST MAIN_* 컬럼 UPSERT (EFFECTIVE_SRC='T')
+
+[Isolation Forest 피처 (6개)]
+  arrival_sec   : 하루 중 도착 시각(초). 비정상 시간대 탐지.
+  tot_rec_cnt   : 전체 레코드 수. 건수 급변 탐지.
+  send_rec_cnt  : 전송 레코드 수. 전송률 이상 탐지.
+  weekday       : 요일(0=월~6=일). 요일별 패턴 학습.
+  is_month_end  : 월말 여부(day≥25이면 1). 월말 특이 패턴 반영.
+  day_of_month  : 월중 일(1~31). EVERY_N_DAYS 날짜 패턴 인식.
+
+[산출물]
+  - {MODEL_DIR}/{FILE_ID}_iso.pkl    : 학습된 IsolationForest 모델
+  - {MODEL_DIR}/{FILE_ID}_scaler.pkl : StandardScaler (피처 정규화용)
+  - BAT_FILE_FREQ_MST MAIN_* 컬럼   : detector가 사용하는 주기 프로필
+
+[주의]
+  기존 .pkl 파일은 이번 trainer 실행 완료 전까지 detector가 계속 사용한다.
+  배포 후 첫 trainer 실행 전까지 피처 수 불일치로 anomaly score가 -0.5
+  fallback 처리될 수 있다.
+"""
 
 import sys
 import os

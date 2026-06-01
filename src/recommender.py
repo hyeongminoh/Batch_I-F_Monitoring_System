@@ -1,13 +1,29 @@
 # ============================================================
 # recommender.py - 모니터링 제외 파일 자동 추천 프로세스
 # cron: 0 3 * * 1 python3 /opt/batch_monitor/src/recommender.py >> /var/log/recommender.log 2>&1
-#
-# 동작:
-#   1. 90일 이력으로 IRREGULAR 또는 샘플 부족 FILE_ID 탐지
-#   2. LLM(EXAONE)으로 한국어 제외 사유 생성
-#   3. BAT_MNTLST_EXC에 USE_YN='P'(추천대기)로 INSERT
-#      → 담당자가 'Y'(제외) 또는 'N'(유지)으로 최종 결정
 # ============================================================
+"""
+매주 월요일 03:00에 실행되어 모니터링에서 제외할 파일을 자동으로 추천한다.
+불규칙하게 오거나 데이터가 너무 적어 패턴 분석이 불가능한 파일이 대상이다.
+
+[처리 흐름]
+  1. BAT_MNTLST_EXC에서 이미 관리 중인 FILE_ID 조회
+     (USE_YN IN ('Y','P') → 이미 제외됐거나 추천 대기 중인 파일은 재추천 제외)
+  2. COM_BATFILE_TRN에서 최근 90일 수신 이력 조회
+  3. FILE_ID별 제외 추천 후보 탐지:
+     - 샘플 부족: 수신 건수 < MIN_SAMPLE_COUNT → LOW_SAMPLE
+     - 불규칙:    classify_frequency 결과 IRREGULAR → IRREGULAR
+  4. LLM(EXAONE)으로 한국어 제외 사유 생성 (실패 시 fallback 템플릿 사용)
+  5. BAT_MNTLST_EXC에 USE_YN='P'(추천대기)로 INSERT
+
+[담당자 후속 처리]
+  USE_YN 'P'(추천대기) → 담당자 검토 후:
+    'Y' : 제외 확정 → detector/trainer가 해당 FILE_ID 무시
+    'N' : 추천 거절 → 계속 모니터링
+
+[LLM 비활성화]
+  USE_LLM=0 이면 fallback 템플릿 사유를 사용하며 LLM을 호출하지 않는다.
+"""
 
 import sys
 import os

@@ -1,5 +1,21 @@
 """
-recommender.py 에서 사용하는 SQL 모음
+recommender.py 전용 SQL 상수 모음.
+
+[상수 목록]
+  GET_MANAGED_FILE_IDS
+      BAT_MNTLST_EXC에서 USE_YN IN ('Y','P') 파일 조회.
+      이미 제외 확정('Y') 또는 추천 대기('P') 상태인 파일은 재추천하지 않는다.
+
+  GET_ANALYSIS_DATA
+      COM_BATFILE_TRN에서 최근 90일 수신 이력 조회.
+      recommender는 이 데이터로 classify_frequency()를 실행해
+      IRREGULAR 또는 샘플 부족 파일을 탐지한다.
+
+  INSERT_RECOMMENDATION
+      탐지된 후보를 BAT_MNTLST_EXC에 USE_YN='P'(추천대기)로 등록.
+      담당자 검토 후 'Y'(제외) 또는 'N'(유지)으로 최종 결정된다.
+      이미 관리 중인 FILE_ID는 GET_MANAGED_FILE_IDS로 사전 필터링하므로
+      중복 INSERT 발생 가능성이 낮지만, 운영 환경에서는 PK/UK 제약 확인 권장.
 """
 
 # USE_YN IN ('Y','P') : 이미 제외 중이거나 추천 대기인 FILE_ID는 재추천 제외

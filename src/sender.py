@@ -2,6 +2,31 @@
 # sender.py - 슬랙 알람 전송 프로세스
 # cron: */5 * * * * python3 /opt/batch_monitor/src/sender.py >> /var/log/sender.log 2>&1
 # ============================================================
+"""
+5분마다 실행되어 BAT_ALARM_HIS의 미전송 알람(SEND_STS='0')을 슬랙으로 발송한다.
+detector가 탐지·저장한 알람을 사람이 볼 수 있도록 실제 채널에 보내는 역할.
+
+[처리 흐름]
+  1. BAT_ALARM_HIS에서 SEND_STS='0'인 알람 조회 (발생시간 오름차순)
+  2. 알람별:
+     a. DB 원문(ALARM_MSG) → {ALARM_DIR}/ALARM_{FILE_ID}_{ts}_src.txt 저장 (항상)
+     b. USE_LLM=1이면 LLM(EXAONE)으로 슬랙용 문구 재작성
+        성공 → {ALARM_DIR_LLM}/..._llm.txt 저장, 이 파일을 슬랙 전송본으로 사용
+        실패 → _src.txt 를 전송본으로 사용
+     c. mon_slack.sh 실행 → 슬랙 채널 전송
+     d. 성공: SEND_STS='1', TGT_FILE_PATH·SEND_DT 기록
+        실패: SEND_STS='9', ERR_MSG 기록
+
+[파일 저장 구조]
+  {ALARM_DIR}/
+  ├── ALARM_{FILE_ID}_{ts}_src.txt   ← DB 원문 (항상 생성)
+  └── llm/
+      └── ALARM_{FILE_ID}_{ts}_llm.txt  ← LLM 재작성본 (성공 시만)
+
+[전송 실패 처리]
+  SEND_STS='9'로 기록하고 다음 run에서 재시도하지 않는다.
+  (재시도가 필요하다면 SEND_STS를 수동으로 '0'으로 되돌린다)
+"""
 
 import sys
 import os

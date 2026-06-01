@@ -1,5 +1,20 @@
 """
-trainer.py 에서 사용하는 SQL 모음
+trainer.py 전용 SQL 상수 모음.
+
+[상수 목록]
+  GET_EXCLUDED_FILE_IDS
+      BAT_MNTLST_EXC에서 USE_YN='Y' 제외 파일 조회.
+      학습 대상에서 완전히 제외 (모델 파일도 생성하지 않음).
+
+  GET_TRAINING_DATA
+      COM_BATFILE_TRN에서 최근 180일 수신 이력 조회.
+      detector(90일)보다 긴 기간을 사용해 계절성·월말 패턴까지 학습.
+
+  UPSERT_FREQ_MST
+      학습 완료 후 BAT_FILE_FREQ_MST의 MAIN_* 컬럼을 갱신.
+      EFFECTIVE_SRC를 항상 'T'(trainer)로 설정 → detector가 trainer 결과를 우선 사용.
+      기존 행이 있으면 UPDATE, 없으면 INSERT (MERGE 방식).
+      FB_*(detector fallback) 컬럼은 건드리지 않아 이력 보존.
 """
 
 GET_EXCLUDED_FILE_IDS = """

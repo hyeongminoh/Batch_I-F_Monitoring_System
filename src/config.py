@@ -2,6 +2,24 @@
 # config.py - 배치 파일 모니터링 시스템 설정
 # 민감 정보(DB 접속 등)는 .env 파일에서 로드
 # ============================================================
+"""
+시스템 전체에서 공유하는 설정값을 한 곳에서 관리한다.
+모든 프로세스(detector / sender / trainer / recommender)가 이 파일을 import한다.
+
+[민감 정보 관리]
+  DB 접속 정보·슬랙 채널 등 민감값은 .env 파일에 기재하고 git에는 올리지 않는다.
+  .env 위치: src/.env 또는 프로젝트 루트 .env (우선순위: src/.env 먼저 탐색)
+  .env.example 파일을 참고해 .env 작성.
+
+[주요 설정 항목]
+  DB_USER / DB_PASSWORD / DB_DSN   : Oracle DB 접속 정보
+  SLACK_CHANNEL / SLACK_SCRIPT     : 슬랙 알람 채널 및 전송 스크립트 경로
+  BASE_DATA_DIR                    : 모델·알람파일·로그 저장 루트 경로
+  USE_LLM                          : 0이면 LLM 비활성화, fallback 메시지 사용
+  HISTORY_DAYS / TRAIN_HISTORY_DAYS: detector 90일, trainer 180일 조회 기간
+  MIN_SAMPLE_COUNT                 : window 계산에 필요한 최소 샘플 수 (기본 3)
+  VOLUME_ZSCORE_THRESHOLD          : V 알람 발동 Z-score 임계값 (기본 3.0)
+"""
 
 import os
 
