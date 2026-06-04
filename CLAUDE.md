@@ -112,6 +112,7 @@ CREATE TABLE BAT_MNTLST_EXC (
 ```sql
 CREATE TABLE BAT_ALARM_HIS (
     MBRSH_PGM_ID    VARCHAR2(1)     NOT NULL,  -- 멤버쉽프로그램ID
+    PROC_DY         VARCHAR2(8)     NOT NULL,  -- 처리일자 YYYYMMDD (알람발생일 기준)
     FILE_ID         VARCHAR2(10)    NOT NULL,  -- 파일ID
     ALARM_ID        NUMBER          NOT NULL,  -- 알람ID (SEQ_BAT_ALARM_HIS.NEXTVAL)
     ALARM_DT        DATE,                      -- 알람발생일시
