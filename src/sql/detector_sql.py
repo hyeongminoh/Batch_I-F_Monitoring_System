@@ -40,7 +40,7 @@ HAS_ALARM_TODAY = """
     FROM   BAT_ALARM_HIS
     WHERE  FILE_ID    = :file_id
       AND  ALARM_TYPE = :alarm_type
-      AND  TRUNC(ALARM_DT) = TRUNC(SYSDATE)
+      AND  PROC_DY    = TO_CHAR(SYSDATE, 'YYYYMMDD')
 """
 
 INSERT_ALARM = """
