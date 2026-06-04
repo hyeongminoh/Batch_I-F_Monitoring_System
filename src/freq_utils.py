@@ -80,7 +80,9 @@ def detect_dom_pattern(file_df, freq_type, round_gap):
     anchor_days = [max(c, key=lambda d: dom_counts[d]) for c in clusters]
 
     # 기대 클러스터 수 초과 시 빈도 낮은 클러스터 제거
-    max_clusters = max(1, 30 // max(1, round_gap))
+    # round() 사용: 30//20=1 이지만 round(30/20)=round(1.5)=2 로 4일·24일 같은
+    # 비대칭 패턴(20일+10일 교번)에서 두 anchor가 모두 유지됨
+    max_clusters = max(1, round(30 / max(1, round_gap)))
     if len(clusters) > max_clusters:
         ranked = sorted(
             zip([sum(dom_counts[d] for d in c) for c in clusters], anchor_days),

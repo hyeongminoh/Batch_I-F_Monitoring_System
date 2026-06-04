@@ -66,7 +66,7 @@ UPSERT_FREQ_MST = """
             MAIN_ANALYSIS_ST, MAIN_ANALYSIS_ED,
             MAIN_UPD_DT, MAIN_REGR_ID,
             EFFECTIVE_SRC, EFFECTIVE_UPD_DT,
-            REGR_ID, REG_DT, UPD_DT
+            REGR_ID, REG_DT, UPDR_ID, UPD_DT
         ) VALUES (
             :file_id,
             :freq_type, :median_gap, :std_gap, :round_gap,
@@ -74,6 +74,6 @@ UPSERT_FREQ_MST = """
             :analysis_st, :analysis_ed,
             SYSDATE, :regr_id,
             'T', SYSDATE,
-            :regr_id, SYSDATE, SYSDATE
+            :regr_id, SYSDATE, :regr_id, SYSDATE
         )
 """

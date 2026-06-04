@@ -50,14 +50,14 @@ INSERT_ALARM = """
         EXP_MIN_TIME, EXP_MED_TIME, EXP_MAX_TIME,
         CHECK_TIME,   DELAY_MIN,    ANOMALY_SCORE,
         ALARM_MSG,    SEND_STS,
-        REGR_ID,      REG_DT
+        REGR_ID,      REG_DT,    UPDR_ID,   UPD_DT
     ) VALUES (
         :mbrsh,     :file_id,    :file_nm,   SEQ_BAT_ALARM_HIS.NEXTVAL,
         :alarm_dt,  :alarm_type, :freq_type,
         :exp_min,   :exp_med,    :exp_max,
         :chk_time,  :delay_min,  :anomaly_score,
         :alarm_msg, '0',
-        :regr_id,   SYSDATE
+        :regr_id,   SYSDATE,   :regr_id,  SYSDATE
     )
 """
 
@@ -107,7 +107,7 @@ UPSERT_FREQ_MST_FB = """
             FB_ANALYSIS_ST, FB_ANALYSIS_ED,
             FB_UPD_DT, FB_REGR_ID,
             EFFECTIVE_SRC, EFFECTIVE_UPD_DT,
-            REGR_ID, REG_DT, UPD_DT
+            REGR_ID, REG_DT, UPDR_ID, UPD_DT
         ) VALUES (
             :file_id,
             :freq_type, :median_gap, :std_gap, :round_gap,
@@ -115,6 +115,6 @@ UPSERT_FREQ_MST_FB = """
             :analysis_st, :analysis_ed,
             SYSDATE, :regr_id,
             'D', SYSDATE,
-            :regr_id, SYSDATE, SYSDATE
+            :regr_id, SYSDATE, :regr_id, SYSDATE
         )
 """

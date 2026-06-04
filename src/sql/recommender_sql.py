@@ -40,9 +40,9 @@ GET_ANALYSIS_DATA = """
 INSERT_RECOMMENDATION = """
     INSERT INTO BAT_MNTLST_EXC (
         MBRSH_PGM_ID, FILE_ID, EXCL_RSN, USE_YN,
-        REGR_ID, REG_DT
+        REGR_ID, REG_DT, UPDR_ID, UPD_DT
     ) VALUES (
         :mbrsh, :file_id, :excl_rsn, 'P',
-        :regr_id, SYSDATE
+        :regr_id, SYSDATE, :regr_id, SYSDATE
     )
 """
