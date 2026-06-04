@@ -45,20 +45,21 @@ HAS_ALARM_TODAY = """
 
 INSERT_ALARM = """
     INSERT INTO BAT_ALARM_HIS (
-        MBRSH_PGM_ID, PROC_DY,   FILE_ID,    FILE_NM,    ALARM_ID,
-        ALARM_DT,     ALARM_TYPE, FREQUENCY_TYPE,
+        MBRSH_PGM_ID, PROC_DY,
+        FILE_ID,      FILE_NM,      ALARM_ID,
+        ALARM_DT,     ALARM_TYPE,   FREQUENCY_TYPE,
         EXP_MIN_TIME, EXP_MED_TIME, EXP_MAX_TIME,
         CHECK_TIME,   DELAY_MIN,    ANOMALY_SCORE,
         ALARM_MSG,    SEND_STS,
-        REGR_ID,      REG_DT,    UPDR_ID,   UPD_DT
+        REGR_ID,      REG_DT,       UPDR_ID,  UPD_DT
     ) VALUES (
-        :mbrsh,     TO_CHAR(:alarm_dt, 'YYYYMMDD'),
-                               :file_id,   :file_nm,   SEQ_BAT_ALARM_HIS.NEXTVAL,
+        :mbrsh,     TO_CHAR(SYSDATE, 'YYYYMMDD'),
+        :file_id,   :file_nm,   SEQ_BAT_ALARM_HIS.NEXTVAL,
         :alarm_dt,  :alarm_type, :freq_type,
         :exp_min,   :exp_med,    :exp_max,
         :chk_time,  :delay_min,  :anomaly_score,
         :alarm_msg, '0',
-        :regr_id,   SYSDATE,   :regr_id,  SYSDATE
+        :regr_id,   SYSDATE,     :regr_id,  SYSDATE
     )
 """
 
