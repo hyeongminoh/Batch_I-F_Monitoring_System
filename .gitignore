@@ -33,6 +33,7 @@ env/
 docker-compose.override.yml
 *.tar.gz
 *.tar
+*.zip
 
 # Claude Code internal directory
 .claude/

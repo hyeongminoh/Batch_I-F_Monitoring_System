@@ -111,13 +111,13 @@ CREATE TABLE BAT_MNTLST_EXC (
 ### BAT_ALARM_HIS (신규 - 알람 이력 및 중복 방지)
 ```sql
 CREATE TABLE BAT_ALARM_HIS (
-    MBRSH_PGM_ID    VARCHAR2(1)     NOT NULL,  -- 멤버쉽프로그램ID
-    PROC_DY         VARCHAR2(8)     NOT NULL,  -- 처리일자 YYYYMMDD (알람발생일 기준)
-    FILE_ID         VARCHAR2(10)    NOT NULL,  -- 파일ID
-    ALARM_ID        NUMBER          NOT NULL,  -- 알람ID (SEQ_BAT_ALARM_HIS.NEXTVAL)
+    MBRSH_PGM_ID    VARCHAR2(1)     NOT NULL,  -- 멤버쉽프로그램ID         ┐
+    PROC_DY         VARCHAR2(8)     NOT NULL,  -- 처리일자 YYYYMMDD         │
+    FILE_ID         VARCHAR2(10)    NOT NULL,  -- 파일ID                    ├─ PK
+    FILE_NM         VARCHAR2(500)   NOT NULL,  -- 파일명                    │
+    ALARM_ID        NUMBER          NOT NULL,  -- 알람ID (SEQ 채번)         ┘
     ALARM_DT        DATE,                      -- 알람발생일시
     ALARM_TYPE      CHAR(1),                   -- 알람유형 M=미수신 V=건수이상
-    FILE_NM         VARCHAR2(40),              -- 알람 시점 기준 가장 최근 수신 파일명
     FREQUENCY_TYPE  VARCHAR2(20),              -- 배치수신주기
     EXP_MIN_TIME    VARCHAR2(8),               -- 예상도착 최솟값 HH24:MI:SS (5th)
     EXP_MED_TIME    VARCHAR2(8),               -- 예상도착 중앙값 HH24:MI:SS (50th)
@@ -135,6 +135,10 @@ CREATE TABLE BAT_ALARM_HIS (
     UPDR_ID         VARCHAR2(8),               -- 변경자ID
     UPD_DT          DATE                       -- 변경일시
 );
+
+ALTER TABLE BAT_ALARM_HIS
+    ADD CONSTRAINT PK_BAT_ALARM_HIS
+    PRIMARY KEY (MBRSH_PGM_ID, PROC_DY, FILE_ID, FILE_NM, ALARM_ID);
 ```
 - ALARM_ID 채번: SEQ_BAT_ALARM_HIS 시퀀스 사용
 - ALARM_TYPE 흐름: M=미수신(deadline 초과), V=건수이상(TOT_REC_CNT Z-score 초과)
