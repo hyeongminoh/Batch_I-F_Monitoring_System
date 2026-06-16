@@ -59,6 +59,7 @@ from sql.detector_sql import (
     INSERT_ALARM,
     GET_FREQ_MST,
     UPSERT_FREQ_MST_FB,
+    GET_BUSINESS_DAYS,
 )
 
 log = setup_logger('detector', LOG_DIR)
@@ -69,6 +70,17 @@ log = setup_logger('detector', LOG_DIR)
 # ============================================================
 def get_connection():
     return oracledb.connect(user=DB_USER, password=DB_PASSWORD, dsn=DB_DSN)
+
+
+# ============================================================
+# 영업일 캘린더 로드 (ICS_WRKDAY_MST, run 시작 시 1회)
+# ============================================================
+def load_business_days(conn):
+    from datetime import date as date_type
+    with conn.cursor() as cur:
+        cur.execute(GET_BUSINESS_DAYS, days=HISTORY_DAYS)
+        rows = cur.fetchall()
+    return {date_type(int(r[0][:4]), int(r[0][4:6]), int(r[0][6:8])) for r in rows}
 
 
 # ============================================================
@@ -445,6 +457,10 @@ def main():
                  f"(T={sum(1 for v in freq_mst.values() if v['effective_src'] == 'T')}, "
                  f"D={sum(1 for v in freq_mst.values() if v['effective_src'] == 'D')})")
 
+        biz_days = load_business_days(conn)
+        log.info(f"영업일 캘린더 로드: {len(biz_days)}건"
+                 + (f" ({min(biz_days)} ~ {max(biz_days)})" if biz_days else ""))
+
         file_ids = [fid for fid in hist_df['file_id'].unique() if fid not in excluded]
         log.info(f"모니터링 대상 FILE_ID: {len(file_ids)}건")
         log.info("-" * 60)
@@ -470,7 +486,7 @@ def main():
                     log.info(f"  [{file_id}] 수신 주기 (MST/{profile['effective_src']}): "
                              f"{freq_type} (median={median_gap:.1f}일, std={std_gap:.1f}일{dom_info})")
                 else:
-                    freq_type, median_gap, std_gap = classify_frequency(file_df)
+                    freq_type, median_gap, std_gap = classify_frequency(file_df, biz_days)
                     round_gap   = round(median_gap)
                     dom_pattern = detect_dom_pattern(file_df, freq_type, round_gap)
                     dom_info = f", 월중패턴={dom_pattern}" if dom_pattern else ""
@@ -485,6 +501,10 @@ def main():
 
                 if freq_type == "IRREGULAR":
                     log.info(f"  [{file_id}] SKIP → IRREGULAR (불규칙 수신 파일)")
+                    continue
+
+                if freq_type == "BUSINESS_DAY" and today not in biz_days:
+                    log.info(f"  [{file_id}] SKIP → BUSINESS_DAY 파일, 오늘({today})은 비영업일")
                     continue
 
                 # 2. 도착 여부에 따라 분기
