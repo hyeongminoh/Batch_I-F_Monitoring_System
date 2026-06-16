@@ -206,7 +206,11 @@ CREATE TABLE BAT_FILE_FREQ_MST (
 
 ### 주기 분류 — freq_utils.classify_frequency()
 ```python
-# file_df['arrival_date'].unique() 기준 날짜 간격 계산
+# biz_days(ICS_WRKDAY_MST 영업일 set) 전달 시 BUSINESS_DAY를 먼저 판별
+# 조건: ① 모든 도착일이 영업일 ② 영업일 순서 기준 연속 간격이 모두 1
+if biz_days and all_on_biz and all(biz_gap == 1):  → BUSINESS_DAY
+
+# 달력 간격 기준 분류 (BUSINESS_DAY 조건 불충족 시)
 gap = round(median_gap)
 if gap == 0:                    → IRREGULAR
 elif std_gap > median_gap * 0.5:→ IRREGULAR  # 알람 제외 대상
@@ -217,10 +221,12 @@ else:                           → EVERY_{gap}_DAYS
 ```
 - trainer와 detector 양쪽에서 공통 사용 (freq_utils.py)
 - detector는 BAT_FILE_FREQ_MST 미등록 시에만 호출
+- biz_days: ICS_WRKDAY_MST WORK_YN='Y' (MBRSH_PGM_ID='A') 날짜 set, run 시작 시 1회 로드
 
 ### 월중 수신일 패턴 탐지 — freq_utils.detect_dom_pattern()
 ```python
-# EVERY_N_DAYS / MONTHLY 파일에서만 동작 (DAILY·WEEKLY·IRREGULAR는 None 반환)
+# EVERY_N_DAYS / MONTHLY 파일에서만 동작
+# DAILY·WEEKLY·BUSINESS_DAY·IRREGULAR는 None 반환
 # 1. 전체 수신 레코드의 day_of_month 빈도 집계
 # 2. round_gap // 2 를 최소 간격으로 탐욕적 클러스터링
 # 3. 각 클러스터의 최빈 day를 anchor로 선택
@@ -244,8 +250,10 @@ detector (10분) → run 시작 시 전체 로드(1회 쿼리)
 
 | FREQ_TYPE | 필터 기준 |
 |---|---|
-| DAILY / WEEKLY | 요일 + 월말여부(day≥25) |
+| DAILY / WEEKLY / BUSINESS_DAY | 요일 + 월말여부(day≥25) |
 | MONTHLY / EVERY_N_DAYS | day_of_month ± max(2, round_gap//5)일, DOM_PATTERN anchor 기반 |
+
+BUSINESS_DAY 파일은 detector에서 오늘이 비영업일(ICS_WRKDAY_MST WORK_YN='N')이면 알람 처리 전 SKIP합니다.
 
 ### 도착 window 계산 (M 알람용)
 - 위 컨텍스트 필터 적용 후 도착 시각(arrival_sec) percentile 계산

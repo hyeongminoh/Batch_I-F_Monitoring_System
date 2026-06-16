@@ -3,31 +3,35 @@
 trainer.py 와 detector.py 양쪽에서 동일한 로직으로 사용된다.
 
 [주요 함수]
-  classify_frequency(file_df)
+  classify_frequency(file_df, biz_days=None)
       → 수신 날짜 간격의 중앙값·표준편차를 기반으로 주기 유형을 반환.
+      → biz_days: ICS_WRKDAY_MST에서 로드한 영업일 날짜 set (date 타입).
+                  전달 시 BUSINESS_DAY 여부를 달력 간격보다 먼저 판별.
       → 반환값: (freq_type, median_gap, std_gap)
-      → freq_type 종류: DAILY / WEEKLY / MONTHLY / EVERY_N_DAYS / IRREGULAR
+      → freq_type 종류: BUSINESS_DAY / DAILY / WEEKLY / MONTHLY / EVERY_N_DAYS / IRREGULAR
 
   detect_dom_pattern(file_df, freq_type, round_gap)
       → MONTHLY / EVERY_N_DAYS 파일에서 월중 특정 수신일(anchor) 패턴을 탐지.
       → 반환값: "5,15" 형태 문자열 또는 None
-      → DAILY·WEEKLY·IRREGULAR는 None 반환 (해당 없음)
+      → DAILY·WEEKLY·BUSINESS_DAY·IRREGULAR는 None 반환 (해당 없음)
 
   sec_to_hms(sec)
       → 초(int)를 "HH:MM:SS" 형식 문자열로 변환. 도착 window 표시에 사용.
 
 [주기 분류 기준 (classify_frequency)]
+  biz_days 전달 시 달력 간격 계산보다 BUSINESS_DAY 판별을 먼저 수행.
   round_gap = round(median_gap)
-  ┌─────────────────────────────────────────────────────┐
-  │ 조건                              │ 분류            │
-  ├───────────────────────────────────┼─────────────────┤
-  │ round_gap == 0                    │ IRREGULAR       │
-  │ std_gap > median_gap × 0.5        │ IRREGULAR       │
-  │ round_gap == 1                    │ DAILY           │
-  │ round_gap in (6, 7, 8)            │ WEEKLY          │
-  │ 25 ≤ round_gap ≤ 35              │ MONTHLY         │
-  │ 그 외                             │ EVERY_{N}_DAYS  │
-  └───────────────────────────────────┴─────────────────┘
+  ┌─────────────────────────────────────────────────────────────────┐
+  │ 조건                                    │ 분류                  │
+  ├─────────────────────────────────────────┼───────────────────────┤
+  │ 모든 도착일이 영업일 AND 영업일 간격=1  │ BUSINESS_DAY  ← 우선 │
+  │ round_gap == 0                          │ IRREGULAR             │
+  │ std_gap > median_gap × 0.5             │ IRREGULAR             │
+  │ round_gap == 1                          │ DAILY                 │
+  │ round_gap in (6, 7, 8)                  │ WEEKLY                │
+  │ 25 ≤ round_gap ≤ 35                    │ MONTHLY               │
+  │ 그 외                                   │ EVERY_{N}_DAYS        │
+  └─────────────────────────────────────────┴───────────────────────┘
 """
 
 import numpy as np
@@ -93,28 +97,48 @@ def detect_dom_pattern(file_df, freq_type, round_gap):
     return ','.join(str(d) for d in sorted(anchor_days))
 
 
-def classify_frequency(file_df):
+def classify_frequency(file_df, biz_days=None):
     """
     수신 날짜(arrival_date) 간격의 통계를 분석해 배치 파일의 수신 주기를 분류한다.
 
     동일 날짜에 여러 건이 수신되더라도 날짜 단위(unique)로 간격을 계산한다.
     샘플이 2건 미만이면 간격 계산이 불가능하므로 IRREGULAR를 반환한다.
 
+    biz_days가 전달되면 달력 간격보다 먼저 BUSINESS_DAY 여부를 판별한다.
+    판별 조건: ① 모든 도착일이 영업일 ② 연속 도착일 간 영업일 간격이 모두 1
+
     Args:
-        file_df: FILE_ID 단위로 필터된 수신 이력 DataFrame.
-                 arrival_date 컬럼(date 타입) 필수.
+        file_df:  FILE_ID 단위로 필터된 수신 이력 DataFrame.
+                  arrival_date 컬럼(date 타입) 필수.
+        biz_days: ICS_WRKDAY_MST WORK_YN='Y' 날짜 set (datetime.date).
+                  None이면 BUSINESS_DAY 판별을 건너뜀.
 
     Returns:
         (freq_type, median_gap, std_gap) 튜플.
-        - freq_type  : 주기 유형 문자열 (DAILY / WEEKLY / MONTHLY / EVERY_N_DAYS / IRREGULAR)
-        - median_gap : 수신 날짜 간격의 중앙값 (단위: 일)
-        - std_gap    : 수신 날짜 간격의 표준편차 (단위: 일)
+        - freq_type  : BUSINESS_DAY / DAILY / WEEKLY / MONTHLY / EVERY_N_DAYS / IRREGULAR
+        - median_gap : 수신 날짜 간격의 중앙값 (단위: 일, BUSINESS_DAY는 1.0)
+        - std_gap    : 수신 날짜 간격의 표준편차 (단위: 일, BUSINESS_DAY는 0.0)
     """
     dates = sorted(file_df['arrival_date'].unique())
     if len(dates) < 2:
         return "IRREGULAR", 0.0, 0.0
 
-    gaps = [(dates[i + 1] - dates[i]).days for i in range(len(dates) - 1)]
+    # ── BUSINESS_DAY 우선 판별 ────────────────────────────────────────
+    # 조건 ① 모든 도착일이 영업일 집합에 포함
+    # 조건 ② 영업일 순서 기준 연속 간격이 모두 1 (공휴일·주말 건너뜀 고려)
+    if biz_days and all(d in biz_days for d in dates):
+        biz_sorted = sorted(biz_days)
+        biz_rank   = {d: i for i, d in enumerate(biz_sorted)}
+        try:
+            biz_gaps = [biz_rank[dates[i + 1]] - biz_rank[dates[i]]
+                        for i in range(len(dates) - 1)]
+            if all(g == 1 for g in biz_gaps):
+                return "BUSINESS_DAY", 1.0, 0.0
+        except KeyError:
+            pass  # biz_days 범위 밖 날짜 → 달력 기준 분류로 fallback
+
+    # ── 달력 간격 기준 분류 ───────────────────────────────────────────
+    gaps       = [(dates[i + 1] - dates[i]).days for i in range(len(dates) - 1)]
     median_gap = float(np.median(gaps))
     std_gap    = float(np.std(gaps))
     gap        = round(median_gap)

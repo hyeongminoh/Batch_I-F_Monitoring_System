@@ -63,6 +63,17 @@ INSERT_ALARM = """
     )
 """
 
+# ICS_WRKDAY_MST에서 영업일 목록 조회 (BUSINESS_DAY 파일 판별·비영업일 스킵용)
+# ICS_DATE가 DATE 타입이므로 TO_CHAR로 YYYYMMDD 문자열 반환
+GET_BUSINESS_DAYS = """
+    SELECT TO_CHAR(ICS_DATE, 'YYYYMMDD') AS ICS_DATE
+    FROM   ICS_WRKDAY_MST
+    WHERE  MBRSH_PGM_ID = 'A'
+      AND  WORK_YN      = 'Y'
+      AND  ICS_DATE    >= SYSDATE - :days
+    ORDER  BY ICS_DATE
+"""
+
 # 전체 FILE_ID의 유효 주기 프로필을 한 번에 로드.
 # EFFECTIVE_SRC 기준으로 MAIN(T) 또는 FB(D) 컬럼을 선택해 반환.
 GET_FREQ_MST = """

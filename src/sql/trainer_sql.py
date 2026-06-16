@@ -17,6 +17,16 @@ trainer.py 전용 SQL 상수 모음.
       FB_*(detector fallback) 컬럼은 건드리지 않아 이력 보존.
 """
 
+# ICS_WRKDAY_MST에서 영업일 목록 조회 (BUSINESS_DAY 파일 판별용)
+GET_BUSINESS_DAYS = """
+    SELECT TO_CHAR(ICS_DATE, 'YYYYMMDD') AS ICS_DATE
+    FROM   ICS_WRKDAY_MST
+    WHERE  MBRSH_PGM_ID = 'A'
+      AND  WORK_YN      = 'Y'
+      AND  ICS_DATE    >= SYSDATE - :days
+    ORDER  BY ICS_DATE
+"""
+
 GET_EXCLUDED_FILE_IDS = """
     SELECT FILE_ID
     FROM BAT_MNTLST_EXC

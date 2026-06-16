@@ -59,6 +59,7 @@ from sql.trainer_sql import (
     GET_EXCLUDED_FILE_IDS,
     GET_TRAINING_DATA,
     UPSERT_FREQ_MST,
+    GET_BUSINESS_DAYS,
 )
 
 log = setup_logger('trainer', LOG_DIR)
@@ -69,6 +70,17 @@ log = setup_logger('trainer', LOG_DIR)
 # ============================================================
 def get_connection():
     return oracledb.connect(user=DB_USER, password=DB_PASSWORD, dsn=DB_DSN)
+
+
+# ============================================================
+# 영업일 캘린더 로드 (ICS_WRKDAY_MST, run 시작 시 1회)
+# ============================================================
+def get_business_days(conn):
+    from datetime import date as date_type
+    with conn.cursor() as cur:
+        cur.execute(GET_BUSINESS_DAYS, days=TRAIN_HISTORY_DAYS)
+        rows = cur.fetchall()
+    return {date_type(int(r[0][:4]), int(r[0][4:6]), int(r[0][6:8])) for r in rows}
 
 
 # ============================================================
@@ -178,6 +190,10 @@ def main():
         excluded = get_excluded_file_ids(conn)
         log.info(f"제외 FILE_ID: {len(excluded)}건")
 
+        biz_days = get_business_days(conn)
+        log.info(f"영업일 캘린더 로드: {len(biz_days)}건"
+                 + (f" ({min(biz_days)} ~ {max(biz_days)})" if biz_days else ""))
+
         train_df = get_training_data(conn)
         if train_df.empty:
             log.info("학습 데이터 없음. 종료.")
@@ -202,7 +218,7 @@ def main():
                 iso, scaler = train_model(file_df)
                 iso_path, _ = save_models(file_id, iso, scaler)
 
-                freq_type, median_gap, std_gap = classify_frequency(file_df)
+                freq_type, median_gap, std_gap = classify_frequency(file_df, biz_days)
                 round_gap   = round(median_gap)
                 dom_pattern = detect_dom_pattern(file_df, freq_type, round_gap)
                 upsert_freq_mst(conn, file_id, freq_type, median_gap, std_gap,
