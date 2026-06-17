@@ -111,30 +111,137 @@ trainer와 detector가 `freq_utils.py` 를 공통으로 import해 사용하며, 
 
 ### 탐지 가능한 수신 패턴
 
-#### 수신 주기별 탐지 동작
+#### 지원 범위 요약
 
-| FREQ_TYPE | 실제 예시 | 컨텍스트 필터 | 비고 |
-|---|---|---|---|
-| `BUSINESS_DAY` | 영업일(월~금)마다 수신 | 요일 + 월말여부 | 비영업일엔 알람 SKIP |
-| `DAILY` | 매일 09:00 수신 | 요일 + 월말여부 | — |
-| `WEEKLY` | 매주 화요일 수신 | 요일 + 월말여부 | — |
-| `EVERY_N_DAYS` | 격일·N일마다·격월 수신 | day_of_month ± tolerance | tolerance = `max(2, N//5)` |
-| `MONTHLY` | 매월 특정일 수신 | day_of_month ± tolerance | tolerance = 6 |
-| `IRREGULAR` | 불규칙 수신 | **알람 없음 (SKIP)** | — |
+| 지원 수준 | FREQ_TYPE | 설명 |
+|---|---|---|
+| ✅ 완전 지원 | `BUSINESS_DAY` | 영업일(월~금, 공휴일 제외)마다 수신 |
+| ✅ 완전 지원 | `DAILY` | 주말 포함 매일 수신 |
+| ✅ 지원 | `WEEKLY` | 매주 특정 요일 수신 |
+| ✅ 지원 | `MONTHLY` | 매월 특정일 수신 |
+| ✅ 지원 | `EVERY_N_DAYS` | N일마다 수신 |
+| ⚠️ 분류만 | `IRREGULAR` | 불규칙 수신 → 알람 없음, recommender 제외 추천 |
 
-> `IRREGULAR` 판정: `gap == 0` 또는 `std_gap > median_gap × 0.5` (변동성 과다)
+---
+
+#### BUSINESS_DAY — 매 영업일 수신 ✅ 완전 지원
+
+영업일(월~금)에만 수신되며 공휴일·주말은 건너뜁니다.  
+`ICS_WRKDAY_MST`(MBRSH_PGM_ID=`'A'`, WORK_YN=`'Y'`)를 기반으로 판별합니다.
+
+> **기존 문제**: 금→월 달력 간격이 3일이어서 std_gap이 높아 `IRREGULAR`로 오분류됨  
+> **해결**: 영업일 순서 기준 연속 간격이 모두 1이면 `BUSINESS_DAY`로 우선 분류
+
+```
+실제 예시
+  파일명  : HR_DAILY.DAT (인사 시스템 일별 추출)
+  수신 패턴: 월~금 매일 09:00 ± 10분
+  달력 간격: 1, 1, 1, 1, 3(금→월), 1, 1 ...   ← std 높아 기존엔 IRREGULAR
+  영업일 간격: 1, 1, 1, 1, 1, 1, 1 ...         ← 모두 1 → BUSINESS_DAY ✓
+
+trainer → BAT_FILE_FREQ_MST.MAIN_FREQ_TYPE = 'BUSINESS_DAY'
+detector
+  ├── 영업일(예: 월요일)  → 미수신 시 M 알람 발동
+  └── 비영업일(토·일·공휴일) → SKIP (알람 없음)
+```
+
+---
+
+#### DAILY — 주말 포함 매일 수신 ✅ 완전 지원
+
+토·일요일을 포함해 매일 수신됩니다.  
+수신 이력에 토·일이 포함되어 있으면 `BUSINESS_DAY` 조건을 불충족 → `DAILY`로 분류됩니다.
+
+```
+실제 예시
+  파일명  : SETTLE_DAILY.DAT (일별 정산 파일)
+  수신 패턴: 월~일 매일 22:00 ± 5분
+  달력 간격: 1, 1, 1, 1, 1, 1, 1 ...  → median=1 → DAILY
+
+trainer → BAT_FILE_FREQ_MST.MAIN_FREQ_TYPE = 'DAILY'
+detector
+  ├── 평일  → 미수신 시 M 알람 발동
+  └── 주말  → 미수신 시 M 알람 발동  (주말도 탐지 대상)
+```
+
+---
+
+#### WEEKLY — 매주 특정 요일 수신 ✅ 지원
+
+매주 같은 요일에 수신됩니다. 요일 + 월말여부로 컨텍스트를 분리합니다.
+
+> ⚠️ **현재 미지원**: 해당 요일이 공휴일인 경우 별도 처리 없음 → 공휴일에도 알람 발동 가능
+
+```
+실제 예시
+  파일명  : WEEKLY_RPT.DAT (주간 보고 파일)
+  수신 패턴: 매주 화요일 10:00 ± 15분
+  달력 간격: 7, 7, 7, 7 ... → median=7 → WEEKLY
+
+trainer → BAT_FILE_FREQ_MST.MAIN_FREQ_TYPE = 'WEEKLY'
+detector
+  ├── 화요일  → 미수신 시 M 알람 발동
+  └── 화요일 외 요일 → 컨텍스트 불일치로 샘플 부족 → SKIP
+```
+
+---
+
+#### MONTHLY — 매월 특정일 수신 ✅ 지원
+
+매월 정해진 날짜에 수신됩니다. `DOM_PATTERN`(예: `"4"`, `"10"`)으로 수신일을 저장합니다.
+
+```
+실제 예시
+  파일명  : MONTHLY_CLOSE.DAT (월말 마감 파일)
+  수신 패턴: 매월 10일 06:00 ± 30분
+  달력 간격: ~30일 → median≈30 → MONTHLY, DOM_PATTERN="10"
+
+trainer → MAIN_FREQ_TYPE = 'MONTHLY', MAIN_DOM_PATTERN = '10'
+detector (6/10 기준)
+  ├── 필터: |day_of_month - 10| ≤ 6  →  4~16일 범위
+  └── 해당 범위 이력 3건 이상 → M 알람 발동
+```
+
+---
+
+#### EVERY_N_DAYS — N일마다 수신 ✅ 지원
+
+월 2회·격주 등 N일 주기로 수신됩니다. `DOM_PATTERN`으로 anchor day를 관리합니다.
+
+```
+실제 예시
+  파일명  : BIMONTHLY.DAT (매월 4일·24일 수신)
+  수신 패턴: 4일→24일=20일, 24일→다음달4일=10일 교번
+  달력 간격: sorted median=20 → EVERY_20_DAYS, DOM_PATTERN="4,24"
+  tolerance: max(2, 20//5) = 4
+
+trainer → MAIN_FREQ_TYPE = 'EVERY_20_DAYS', MAIN_DOM_PATTERN = '4,24'
+detector (6/4 기준)
+  ├── anchor=4, 필터: |day - 4| ≤ 4  →  1~8일 범위
+  └── 해당 범위 이력 2건 이상 → M 알람 발동
+```
+
+---
+
+#### 알람이 발동되지 않는 케이스
+
+| 케이스 | 원인 |
+|---|---|
+| `BUSINESS_DAY` + 비영업일(토·일·공휴일) | `ICS_WRKDAY_MST WORK_YN='N'` → SKIP |
+| `IRREGULAR` 파일 | 변동성 과다, 패턴 정의 불가 |
+| 분기·반기 파일 (gap ≥ 90일) | 90일 이력 내 샘플 1건 → `MIN_SAMPLE_COUNT(2)` 미달 |
+| `MONTHLY` + 직전 월 결번 | anchor 범위 샘플 1건 → `MIN_SAMPLE_COUNT(2)` 미달 |
+| `WEEKLY` + 월말 요일 결번 | 90일 내 동일 월말 요일 3~4건, 결번 시 미달 가능 |
+| deadline 미초과 | 현재 시각 < `EXP_MAX_TIME` (95th percentile) |
+| 오늘 이미 동일 유형 알람 발생 | 중복 방지 로직 |
 
 #### 컨텍스트 필터 상세
 
 **BUSINESS_DAY / DAILY / WEEKLY**  
-같은 요일 AND 월말여부(`day ≥ 25`)가 일치하는 이력만 도착 window 계산에 사용합니다.  
-월말 수요일과 일반 수요일을 서로 다른 컨텍스트로 분리해 비교합니다.
-
-`BUSINESS_DAY` 파일은 추가로 오늘이 `ICS_WRKDAY_MST WORK_YN='N'`(비영업일)이면 알람 처리 전 SKIP합니다.
+같은 요일 AND 월말여부(`day ≥ 25`)가 일치하는 이력만 도착 window 계산에 사용합니다.
 
 **MONTHLY / EVERY_N_DAYS**  
-`DOM_PATTERN` anchor ± tolerance 범위 내 이력을 사용합니다.  
-anchor는 오늘 날짜와 가장 가까운 anchor_day가 선택됩니다.
+`DOM_PATTERN` anchor ± tolerance 범위 내 이력을 사용합니다.
 
 ```
 tolerance = max(2, round_gap // 5)
@@ -145,18 +252,6 @@ EVERY_20_DAYS  → max(2,  4) =  4  → ±4일 범위
 MONTHLY(30일)  → max(2,  6) =  6  → ±6일 범위
 EVERY_60_DAYS  → max(2, 12) = 12  → ±12일 범위
 ```
-
-#### 알람이 발동되지 않는 케이스
-
-| 케이스 | 원인 |
-|---|---|
-| `BUSINESS_DAY` 파일 + 비영업일 | `ICS_WRKDAY_MST WORK_YN='N'` → 알람 SKIP |
-| `IRREGULAR` 파일 | 수신 변동성 과다, 정상 패턴 정의 불가 |
-| 분기·반기 파일 (gap ≥ 90일) | 90일 이력 내 샘플 1건 → `MIN_SAMPLE_COUNT` 미달 |
-| `MONTHLY` 파일 + 직전 월 결번 | anchor ± tolerance 범위 내 샘플 1건 → `MIN_SAMPLE_COUNT` 미달 |
-| `WEEKLY` 파일 + 월말 발생일 | 90일 내 동일 월말 요일은 3~4건, 결번 시 `MIN_SAMPLE_COUNT` 미달 가능 |
-| deadline 미초과 | 현재 시각 < `EXP_MAX_TIME` (95th percentile), 아직 대기 시간 내 |
-| 오늘 이미 동일 유형 알람 발생 | 중복 방지 로직 |
 
 ### 월중 수신일 패턴 탐지 — `freq_utils.detect_dom_pattern()`
 
