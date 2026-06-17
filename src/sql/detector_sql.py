@@ -64,13 +64,13 @@ INSERT_ALARM = """
 """
 
 # ICS_WRKDAY_MST에서 영업일 목록 조회 (BUSINESS_DAY 파일 판별·비영업일 스킵용)
-# ICS_DATE가 DATE 타입이므로 TO_CHAR로 YYYYMMDD 문자열 반환
+# ICS_DATE가 VARCHAR2(8) YYYYMMDD 형태이므로 문자열 비교
 GET_BUSINESS_DAYS = """
-    SELECT TO_CHAR(ICS_DATE, 'YYYYMMDD') AS ICS_DATE
+    SELECT ICS_DATE
     FROM   ICS_WRKDAY_MST
     WHERE  MBRSH_PGM_ID = 'A'
       AND  WORK_YN      = 'Y'
-      AND  ICS_DATE    >= SYSDATE - :days
+      AND  ICS_DATE    >= TO_CHAR(SYSDATE - :days, 'YYYYMMDD')
     ORDER  BY ICS_DATE
 """
 
