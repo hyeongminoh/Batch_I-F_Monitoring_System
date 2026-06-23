@@ -10,6 +10,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
  && locale-gen \
  && rm -rf /var/lib/apt/lists/*
 
+ARG GIT_COMMIT=unknown
+LABEL git-commit=$GIT_COMMIT
+
 ENV LANG=ko_KR.UTF-8
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -23,7 +26,8 @@ COPY requirements.txt .
 RUN pip install -r requirements.txt
 
 # 소스 복사 (src/ → /app/)
-COPY src/config.py src/detector.py src/sender.py src/trainer.py \
+COPY src/config.py src/detector.py src/detector_detail.py \
+     src/sender.py src/trainer.py \
      src/recommender.py src/llm.py src/log_utils.py src/freq_utils.py ./
 COPY src/sql/ ./sql/
 
