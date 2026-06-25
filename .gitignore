@@ -47,8 +47,6 @@ docker-compose.override.yml
 docker_run.txt
 src/setup_test_data.py
 
-# 배포 절차서 (서버 경로·접속 정보 포함)
-DEPLOY_LINUX.md
 
 # DB DDL (테이블 생성·변경 스크립트 — 로컬 전용)
 table_sql/
