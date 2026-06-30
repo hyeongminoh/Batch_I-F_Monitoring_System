@@ -114,7 +114,7 @@ UPSERT_FREQ_MST_FB = """
         WHERE MAIN_FREQ_TYPE IS NULL
     WHEN NOT MATCHED THEN
         INSERT (
-            FILE_ID,
+            MBRSH_PGM_ID, FILE_ID,
             FB_FREQ_TYPE, FB_MEDIAN_GAP, FB_STD_GAP, FB_ROUND_GAP,
             FB_DOM_PATTERN, FB_SAMPLE_CNT, FB_WIN_DAYS,
             FB_ANALYSIS_ST, FB_ANALYSIS_ED,
@@ -122,7 +122,7 @@ UPSERT_FREQ_MST_FB = """
             EFFECTIVE_SRC, EFFECTIVE_UPD_DT,
             REGR_ID, REG_DT, UPDR_ID, UPD_DT
         ) VALUES (
-            :file_id,
+            :mbrsh, :file_id,
             :freq_type, :median_gap, :std_gap, :round_gap,
             :dom_pattern, :sample_cnt, :win_days,
             :analysis_st, :analysis_ed,

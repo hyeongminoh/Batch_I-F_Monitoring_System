@@ -1,0 +1,80 @@
+# 리눅스 서버 기준 docker run 명령어
+# 설치 경로: /app/puser/opt/batch_monitor
+# 환경변수: /app/puser/opt/batch_monitor/.env.docker
+
+INSTALL_DIR=/app/puser/opt/batch_monitor
+
+# ──────────────────────────────────────────────
+# 0. 이미지 로드 (최초 1회 또는 업데이트 시)
+# ──────────────────────────────────────────────
+docker load < ${INSTALL_DIR}/batch-monitor.tar
+
+
+# ──────────────────────────────────────────────
+# 1. 이미지 검증 (load 직후 확인)
+# ──────────────────────────────────────────────
+docker images batch-monitor:latest && \
+docker run --rm \
+  --env-file /app/puser/opt/batch_monitor/.env.docker \
+  -v /app/puser/opt/batch_monitor/data:/app/puser/opt/batch_monitor/data \
+  -v /app/puser/opt/batch_monitor/logs:/app/puser/opt/batch_monitor/logs \
+  batch-monitor:latest wc -l trainer.py && \
+docker run --rm batch-monitor:latest env | grep -E 'LANG|LC_ALL|PYTHONIOENCODING'
+
+# 기대 결과:
+#   trainer.py 라인수 → 248 trainer.py
+#   환경변수           → LANG=ko_KR.UTF-8 / LC_ALL=ko_KR.UTF-8 / PYTHONIOENCODING=utf-8
+
+
+# ──────────────────────────────────────────────
+# 2. trainer.py (최초 반드시 먼저 실행)
+# ──────────────────────────────────────────────
+docker run --rm \
+  --env-file /app/puser/opt/batch_monitor/.env.docker \
+  -e TZ=Asia/Seoul \
+  -v /app/puser/opt/batch_monitor/data:/app/puser/opt/batch_monitor/data \
+  -v /app/puser/opt/batch_monitor/logs:/app/puser/opt/batch_monitor/logs \
+  batch-monitor:latest \
+  python trainer.py 2>&1 | iconv -f UTF-8 -t EUC-KR
+
+
+# ──────────────────────────────────────────────
+# 3. recommender.py
+# ──────────────────────────────────────────────
+docker run --rm \
+  --env-file /app/puser/opt/batch_monitor/.env.docker \
+  -e TZ=Asia/Seoul \
+  -v /app/puser/opt/batch_monitor/data:/app/puser/opt/batch_monitor/data \
+  -v /app/puser/opt/batch_monitor/logs:/app/puser/opt/batch_monitor/logs \
+  batch-monitor:latest \
+  python recommender.py 2>&1 | iconv -f UTF-8 -t EUC-KR
+
+
+# ──────────────────────────────────────────────
+# 4. detector.py
+# ──────────────────────────────────────────────
+docker run --rm \
+  --env-file /app/puser/opt/batch_monitor/.env.docker \
+  -e TZ=Asia/Seoul \
+  -v /app/puser/opt/batch_monitor/data:/app/puser/opt/batch_monitor/data \
+  -v /app/puser/opt/batch_monitor/logs:/app/puser/opt/batch_monitor/logs \
+  batch-monitor:latest \
+  python detector.py 2>&1 | iconv -f UTF-8 -t EUC-KR
+
+
+# ──────────────────────────────────────────────
+# 5. sender.py
+# ──────────────────────────────────────────────
+docker run --rm \
+  --env-file /app/puser/opt/batch_monitor/.env.docker \
+  -e TZ=Asia/Seoul \
+  -v /app/puser/opt/batch_monitor/data:/app/puser/opt/batch_monitor/data \
+  -v /app/puser/opt/batch_monitor/logs:/app/puser/opt/batch_monitor/logs \
+  batch-monitor:latest \
+  python sender.py 2>&1 | iconv -f UTF-8 -t EUC-KR
+
+
+# ──────────────────────────────────────────────
+# 6. 이미지 tar 저장 (개발 PC Windows에서 반입용)
+# ──────────────────────────────────────────────
+# docker save batch-monitor:latest -o batch-monitor.tar

@@ -71,7 +71,7 @@ UPSERT_FREQ_MST = """
             UPD_DT            = SYSDATE
     WHEN NOT MATCHED THEN
         INSERT (
-            FILE_ID,
+            MBRSH_PGM_ID, FILE_ID,
             MAIN_FREQ_TYPE, MAIN_MEDIAN_GAP, MAIN_STD_GAP, MAIN_ROUND_GAP,
             MAIN_SAMPLE_CNT, MAIN_DOM_PATTERN, MAIN_WIN_DAYS,
             MAIN_ANALYSIS_ST, MAIN_ANALYSIS_ED,
@@ -79,7 +79,7 @@ UPSERT_FREQ_MST = """
             EFFECTIVE_SRC, EFFECTIVE_UPD_DT,
             REGR_ID, REG_DT, UPDR_ID, UPD_DT
         ) VALUES (
-            :file_id,
+            :mbrsh, :file_id,
             :freq_type, :median_gap, :std_gap, :round_gap,
             :sample_cnt, :dom_pattern, :win_days,
             :analysis_st, :analysis_ed,

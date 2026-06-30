@@ -49,5 +49,5 @@ src/setup_test_data.py
 
 
 # DB DDL (테이블 생성·변경 스크립트 — 로컬 전용)
-table_sql/
-sql/
+/table_sql/
+/sql/

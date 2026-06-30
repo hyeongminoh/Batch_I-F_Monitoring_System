@@ -47,7 +47,7 @@ def setup_logger(name: str, log_dir: str) -> logging.Logger:
         datefmt="%Y%m%d][%H%M%S",
     )
 
-    file_handler = logging.FileHandler(log_path, mode='a', encoding='utf-8')
+    file_handler = logging.FileHandler(log_path, mode='a', encoding='euc-kr')
     file_handler.setFormatter(fmt)
 
     console_handler = logging.StreamHandler()

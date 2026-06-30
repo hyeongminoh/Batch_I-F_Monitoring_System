@@ -51,7 +51,7 @@ from sklearn.preprocessing import StandardScaler
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from config import (
     DB_USER, DB_PASSWORD, DB_DSN,
-    MODEL_DIR, LOG_DIR, TRAIN_HISTORY_DAYS, MIN_SAMPLE_COUNT, REGR_ID
+    MBRSH_PGM_ID, MODEL_DIR, LOG_DIR, TRAIN_HISTORY_DAYS, MIN_SAMPLE_COUNT, REGR_ID
 )
 from log_utils import setup_logger
 from freq_utils import classify_frequency, detect_dom_pattern
@@ -146,6 +146,7 @@ def upsert_freq_mst(conn, file_id, freq_type, median_gap, std_gap, sample_cnt,
                     dom_pattern, file_df):
     with conn.cursor() as cur:
         cur.execute(UPSERT_FREQ_MST, {
+            'mbrsh':       MBRSH_PGM_ID,
             'file_id':     file_id,
             'freq_type':   freq_type,
             'median_gap':  round(median_gap, 4),

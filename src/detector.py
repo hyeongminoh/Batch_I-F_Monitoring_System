@@ -213,6 +213,7 @@ def load_freq_mst(conn):
 def upsert_freq_mst_fb(conn, file_id, freq_type, median_gap, std_gap, dom_pattern, file_df):
     with conn.cursor() as cur:
         cur.execute(UPSERT_FREQ_MST_FB, {
+            'mbrsh':       MBRSH_PGM_ID,
             'file_id':     file_id,
             'freq_type':   freq_type,
             'median_gap':  round(median_gap, 4),
