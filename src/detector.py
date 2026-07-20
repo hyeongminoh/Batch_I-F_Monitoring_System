@@ -35,6 +35,7 @@
 
 import sys
 import os
+import socket
 import numpy as np
 import pandas as pd
 from datetime import datetime
@@ -272,9 +273,11 @@ def get_anomaly_score(file_id, file_df, today, now):
 # ============================================================
 # fallback 템플릿 메시지 생성
 # ============================================================
-def build_fallback_message(file_id, freq_type, window, delay_min):
+def build_fallback_message(file_id, freq_type, window, delay_min, today):
+    hostname = socket.gethostname()
     return (
         f"[배치 미수신 알람] {file_id}\n"
+        f"모니터링서버: {hostname} / 모니터링일자: {today}\n"
         f"마감: {window['exp_max']} / 지연: {delay_min}분 / 주기: {freq_type}\n"
         f"즉시 확인이 필요합니다."
     )
@@ -296,7 +299,7 @@ def save_compare_file(directory, file_id, ts, message):
 # ============================================================
 def generate_alarm_message(file_id, freq_type, window, check_time,
                             delay_min, anomaly_score, today, ts):
-    fallback_msg = build_fallback_message(file_id, freq_type, window, delay_min)
+    fallback_msg = build_fallback_message(file_id, freq_type, window, delay_min, today)
     fallback_path = save_compare_file(ALARM_DIR_FALLBACK, file_id, ts, fallback_msg)
 
     llm_msg, llm_ok = (None, False)
