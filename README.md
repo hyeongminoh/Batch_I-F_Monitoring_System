@@ -54,9 +54,9 @@
 │                                                             │
 │  1. 대기 알람 조회 (BAT_ALARM_HIS SEND_STS='0')             │
 │  2. DB 원문 → ALARM_DIR/…_src.txt 저장 (항상)              │
-│  3. (USE_LLM=1) LLM으로 슬랙용 문구 재작성                  │
+│  3. (USE_LLM=1) LLM으로 문구 재작성                         │
 │     └─ 성공 → ALARM_DIR_LLM/…_llm.txt / 실패 → src 사용    │
-│  4. mon_slack.sh 실행 (llm 성공 시 llm 경로, 아니면 src)    │
+│  4. COM_MAILQUE_MST INSERT (CONTENTS=ALARM_MSG)             │
 │  5. SEND_STS 업데이트 (1=완료 / 9=실패)                     │
 └─────────────────────────────────────────────────────────────┘
 
@@ -359,17 +359,18 @@ features = [
 BAT_ALARM_HIS.ALARM_MSG: LLM 성공 시 LLM 메시지, 실패 시 fallback 저장
 ```
 
-**sender (슬랙 전송 시)**
+**sender (메일큐 적재 시)**
 
 ```
-DB의 ALARM_MSG 원문을 슬랙에 보내기 좋게 LLM이 재작성
-  → 성공: ALARM_DIR_LLM/…_llm.txt 로 전송
-  → 실패: ALARM_DIR/…_src.txt (DB 원문) 로 전송
+DB의 ALARM_MSG 원문을 보내기 좋게 LLM이 재작성
+  → 성공: ALARM_DIR_LLM/…_llm.txt 저장, COM_MAILQUE_MST.CONTENTS에는 DB 원문(ALARM_MSG) 그대로 사용
+  → 실패: ALARM_DIR/…_src.txt (DB 원문) 만 저장
 ```
 
 **fallback 메시지 형식 (detector):**
 ```
 [배치 미수신 알람] EB140402
+모니터링서버: batch01 / 모니터링일자: 2026-07-20
 마감: 09:07:36 / 지연: 134분 / 주기: DAILY
 즉시 확인이 필요합니다.
 ```
@@ -384,6 +385,7 @@ DB의 ALARM_MSG 원문을 슬랙에 보내기 좋게 LLM이 재작성
 | `BAT_MNTLST_EXC` | 신규 | 모니터링 제외 파일 관리 |
 | `BAT_ALARM_HIS` | 신규 | 알람 이력 및 전송 상태 관리 |
 | `BAT_FILE_FREQ_MST` | 신규 | 파일별 수신 주기 프로필 (trainer/detector 공유) |
+| `COM_MAILQUE_MST` | 기존 | sender.py가 알람 발송 시 INSERT하는 메일큐 (실제 발송은 메일큐 처리기 담당) |
 
 ```sql
 -- 알람 ID 채번 시퀀스
@@ -443,7 +445,7 @@ INSERT → '0' (대기)  →  '1' (전송 완료)
 │   ├── config.py            ← .env 로드 및 설정값 관리 (USE_LLM 포함)
 │   ├── freq_utils.py        ← 공통 주기 분류 유틸 (classify_frequency, detect_dom_pattern, sec_to_hms)
 │   ├── detector.py          ← 미수신 감지 프로세스
-│   ├── sender.py            ← 슬랙 전송 프로세스
+│   ├── sender.py            ← 메일큐(COM_MAILQUE_MST) 적재 프로세스
 │   ├── trainer.py           ← 모델 재학습 + BAT_FILE_FREQ_MST MAIN 갱신
 │   ├── recommender.py       ← 모니터링 제외 파일 자동 추천 (USE_YN='P')
 │   ├── llm.py               ← Ollama EXAONE 메시지 생성 (generate / generate_sender)
