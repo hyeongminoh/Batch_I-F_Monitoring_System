@@ -35,7 +35,6 @@
 
 import sys
 import os
-import socket
 import numpy as np
 import pandas as pd
 from datetime import datetime
@@ -47,7 +46,7 @@ from config import (
     DB_USER, DB_PASSWORD, DB_DSN, MBRSH_PGM_ID,
     MODEL_DIR, LOG_DIR, ALARM_DIR_FALLBACK, ALARM_DIR_LLM,
     USE_LLM, OLLAMA_URL, OLLAMA_MODEL, OLLAMA_TIMEOUT,
-    HISTORY_DAYS, MIN_SAMPLE_COUNT, REGR_ID,
+    HISTORY_DAYS, MIN_SAMPLE_COUNT, REGR_ID, HOSTNAME,
     VOLUME_ZSCORE_THRESHOLD,
 )
 import llm as llm_module
@@ -273,8 +272,7 @@ def get_anomaly_score(file_id, file_df, today, now):
 # ============================================================
 # fallback 템플릿 메시지 생성
 # ============================================================
-def build_fallback_message(file_id, freq_type, window, delay_min, today):
-    hostname = socket.gethostname()
+def build_fallback_message(file_id, freq_type, window, delay_min, today, hostname):
     return (
         f"[배치 미수신 알람] {file_id}\n"
         f"모니터링서버: {hostname} / 모니터링일자: {today}\n"
@@ -299,13 +297,13 @@ def save_compare_file(directory, file_id, ts, message):
 # ============================================================
 def generate_alarm_message(file_id, freq_type, window, check_time,
                             delay_min, anomaly_score, today, ts):
-    fallback_msg = build_fallback_message(file_id, freq_type, window, delay_min, today)
+    fallback_msg = build_fallback_message(file_id, freq_type, window, delay_min, today, HOSTNAME)
     fallback_path = save_compare_file(ALARM_DIR_FALLBACK, file_id, ts, fallback_msg)
 
     llm_msg, llm_ok = (None, False)
     if USE_LLM:
         llm_msg, llm_ok = llm_module.generate(
-            file_id, freq_type, window, check_time, delay_min, anomaly_score, today,
+            file_id, freq_type, window, check_time, delay_min, anomaly_score, today, HOSTNAME,
             OLLAMA_URL, OLLAMA_MODEL, OLLAMA_TIMEOUT,
         )
 

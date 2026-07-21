@@ -155,6 +155,11 @@ EOF
 chmod 600 ${INSTALL_DIR}/.env.docker
 ```
 
+> **알람 메시지의 서버명(MONITOR_HOSTNAME)**: `.env.docker`에는 넣지 않는다.
+> Docker 컨테이너 안에서 `socket.gethostname()`은 컨테이너 ID(임의 문자열)를 반환하므로,
+> 실제 서버 hostname을 쓰려면 아래 4.3-1처럼 `docker run` 실행 시점에 `-e MONITOR_HOSTNAME=$(hostname)`로 주입해야 한다.
+> (`.env.docker`에 고정값으로 넣으면 서버명이 바뀔 때마다 수동으로 갱신해야 하므로 비권장)
+
 ### 4.4 mon_slack.sh 경로 설정
 
 `mon_slack.sh`는 컨테이너 안에서 실행되므로, 컨테이너가 접근 가능한 경로에 위치해야 한다.
@@ -261,6 +266,7 @@ export INSTALL_DIR=/app/puser/opt/batch_monitor
 RUN_BASE="docker run --rm \
   --env-file ${INSTALL_DIR}/.env.docker \
   -e TZ=Asia/Seoul \
+  -e MONITOR_HOSTNAME=$(hostname) \
   -v ${INSTALL_DIR}/data:/data \
   -v ${INSTALL_DIR}/logs:/logs \
   batch-monitor:latest"
@@ -314,19 +320,20 @@ crontab -e
 
 ```cron
 # batch-monitor: detector (10분마다)
-*/10 * * * * docker run --rm --env-file /app/puser/opt/batch_monitor/.env.docker -e TZ=Asia/Seoul -v /app/puser/opt/batch_monitor/data:/data -v /app/puser/opt/batch_monitor/logs:/logs batch-monitor:latest python detector.py >> /app/puser/opt/batch_monitor/logs/cron_detector.log 2>&1
+*/10 * * * * docker run --rm --env-file /app/puser/opt/batch_monitor/.env.docker -e TZ=Asia/Seoul -e MONITOR_HOSTNAME=$(hostname) -v /app/puser/opt/batch_monitor/data:/data -v /app/puser/opt/batch_monitor/logs:/logs batch-monitor:latest python detector.py >> /app/puser/opt/batch_monitor/logs/cron_detector.log 2>&1
 
 # batch-monitor: sender (5분마다)
-*/5  * * * * docker run --rm --env-file /app/puser/opt/batch_monitor/.env.docker -e TZ=Asia/Seoul -v /app/puser/opt/batch_monitor/data:/data -v /app/puser/opt/batch_monitor/logs:/logs batch-monitor:latest python sender.py >> /app/puser/opt/batch_monitor/logs/cron_sender.log 2>&1
+*/5  * * * * docker run --rm --env-file /app/puser/opt/batch_monitor/.env.docker -e TZ=Asia/Seoul -e MONITOR_HOSTNAME=$(hostname) -v /app/puser/opt/batch_monitor/data:/data -v /app/puser/opt/batch_monitor/logs:/logs batch-monitor:latest python sender.py >> /app/puser/opt/batch_monitor/logs/cron_sender.log 2>&1
 
 # batch-monitor: trainer (매주 일요일 02:00)
-0 2 * * 0   docker run --rm --env-file /app/puser/opt/batch_monitor/.env.docker -e TZ=Asia/Seoul -v /app/puser/opt/batch_monitor/data:/data -v /app/puser/opt/batch_monitor/logs:/logs batch-monitor:latest python trainer.py >> /app/puser/opt/batch_monitor/logs/cron_trainer.log 2>&1
+0 2 * * 0   docker run --rm --env-file /app/puser/opt/batch_monitor/.env.docker -e TZ=Asia/Seoul -e MONITOR_HOSTNAME=$(hostname) -v /app/puser/opt/batch_monitor/data:/data -v /app/puser/opt/batch_monitor/logs:/logs batch-monitor:latest python trainer.py >> /app/puser/opt/batch_monitor/logs/cron_trainer.log 2>&1
 
 # batch-monitor: recommender (매주 월요일 03:00)
-0 3 * * 1   docker run --rm --env-file /app/puser/opt/batch_monitor/.env.docker -e TZ=Asia/Seoul -v /app/puser/opt/batch_monitor/data:/data -v /app/puser/opt/batch_monitor/logs:/logs batch-monitor:latest python recommender.py >> /app/puser/opt/batch_monitor/logs/cron_recommender.log 2>&1
+0 3 * * 1   docker run --rm --env-file /app/puser/opt/batch_monitor/.env.docker -e TZ=Asia/Seoul -e MONITOR_HOSTNAME=$(hostname) -v /app/puser/opt/batch_monitor/data:/data -v /app/puser/opt/batch_monitor/logs:/logs batch-monitor:latest python recommender.py >> /app/puser/opt/batch_monitor/logs/cron_recommender.log 2>&1
 ```
 
 > **주의**: crontab 내부에서 변수 확장(`${INSTALL_DIR}`)이 동작하지 않을 수 있으므로 절대 경로를 직접 기재한다.
+> `$(hostname)`은 crontab이 각 라인을 실행할 때마다 그 시점의 셸이 평가하므로 별도 설정 없이 정상 동작한다 (서버명이 바뀌어도 자동 반영).
 
 등록 확인:
 ```bash
@@ -381,6 +388,7 @@ docker rmi batch-monitor:<구버전태그>
 docker run --rm \
   --env-file /app/puser/opt/batch_monitor/.env.docker \
   -e TZ=Asia/Seoul \
+  -e MONITOR_HOSTNAME=$(hostname) \
   -v /app/puser/opt/batch_monitor/data:/data \
   -v /app/puser/opt/batch_monitor/logs:/logs \
   batch-monitor:latest \
@@ -400,6 +408,7 @@ docker run --rm \
 | `*_iso.pkl` 없음 오류 | `trainer.py` 먼저 실행하여 모델 파일 생성 |
 | LLM 오류 / 타임아웃 | `.env.docker`에서 `USE_LLM=0` 설정 후 재실행 (fallback 자동 사용) |
 | 슬랙 스크립트 실행 오류 | `mon_slack.sh` 경로·실행 권한 확인 (`chmod +x`) |
+| 알람 메시지의 모니터링서버명이 컨테이너 ID처럼 이상하게 나옴 | `docker run`에 `-e MONITOR_HOSTNAME=$(hostname)` 누락 여부 확인 (섹션 4.3 참고) |
 
 ---
 

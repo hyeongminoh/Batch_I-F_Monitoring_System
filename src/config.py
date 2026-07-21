@@ -22,6 +22,7 @@
 """
 
 import os
+import socket
 
 # ============================================================
 # .env 로더 (python-dotenv 없이 내장 기능으로 파싱)
@@ -96,6 +97,14 @@ HISTORY_DAYS            = 90    # detector 조회 기간 (일)
 TRAIN_HISTORY_DAYS      = 180   # trainer 학습 기간 (일)
 MIN_SAMPLE_COUNT        = 2     # 알람 발동 최소 샘플 수 (미만이면 알람 제외)
 VOLUME_ZSCORE_THRESHOLD = float(os.environ.get('VOLUME_ZSCORE_THRESHOLD', '3.0'))  # 건수 이상 탐지 Z-score 임계값
+
+# ============================================================
+# 모니터링 서버 식별 (알람 메시지용)
+# ============================================================
+# Docker 컨테이너 안에서 socket.gethostname()은 컨테이너 ID를 반환하므로
+# 실제 리눅스 서버명을 쓰려면 MONITOR_HOSTNAME 환경변수로 주입해야 함
+# (미설정 시 socket.gethostname() fallback — 논-도커 실행 환경에서는 정상 동작)
+HOSTNAME = os.environ.get('MONITOR_HOSTNAME') or socket.gethostname()
 
 # ============================================================
 # 공통 메타 정보

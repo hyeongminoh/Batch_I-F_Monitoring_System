@@ -583,6 +583,11 @@ OLLAMA_TIMEOUT=60
 
 # 모니터링 파라미터 — 선택사항, 기본값 사용 시 생략 가능
 VOLUME_ZSCORE_THRESHOLD=3.0   # V 알람 민감도. 낮을수록 민감 (기본 3.0)
+
+# 알람 메시지에 표시할 서버명 — 선택사항, 미설정 시 socket.gethostname() 사용
+# Docker로 실행 시 socket.gethostname()은 컨테이너 ID를 반환하므로
+# docker run에 -e MONITOR_HOSTNAME=$(hostname) 로 주입 권장 (자세한 내용은 DEPLOY_LINUX.md 참고)
+MONITOR_HOSTNAME=your_server_hostname
 ```
 
 ### 4. DB 연동 확인

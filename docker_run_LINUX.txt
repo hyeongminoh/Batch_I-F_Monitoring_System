@@ -16,6 +16,7 @@ docker load < ${INSTALL_DIR}/batch-monitor.tar
 docker images batch-monitor:latest && \
 docker run --rm \
   --env-file /app/puser/opt/batch_monitor/.env.docker \
+  -e MONITOR_HOSTNAME=$(hostname) \
   -v /app/puser/opt/batch_monitor/data:/app/puser/opt/batch_monitor/data \
   -v /app/puser/opt/batch_monitor/logs:/app/puser/opt/batch_monitor/logs \
   batch-monitor:latest wc -l trainer.py && \
@@ -32,6 +33,7 @@ docker run --rm batch-monitor:latest env | grep -E 'LANG|LC_ALL|PYTHONIOENCODING
 docker run --rm \
   --env-file /app/puser/opt/batch_monitor/.env.docker \
   -e TZ=Asia/Seoul \
+  -e MONITOR_HOSTNAME=$(hostname) \
   -v /app/puser/opt/batch_monitor/data:/app/puser/opt/batch_monitor/data \
   -v /app/puser/opt/batch_monitor/logs:/app/puser/opt/batch_monitor/logs \
   batch-monitor:latest \
@@ -44,6 +46,7 @@ docker run --rm \
 docker run --rm \
   --env-file /app/puser/opt/batch_monitor/.env.docker \
   -e TZ=Asia/Seoul \
+  -e MONITOR_HOSTNAME=$(hostname) \
   -v /app/puser/opt/batch_monitor/data:/app/puser/opt/batch_monitor/data \
   -v /app/puser/opt/batch_monitor/logs:/app/puser/opt/batch_monitor/logs \
   batch-monitor:latest \
@@ -56,6 +59,7 @@ docker run --rm \
 docker run --rm \
   --env-file /app/puser/opt/batch_monitor/.env.docker \
   -e TZ=Asia/Seoul \
+  -e MONITOR_HOSTNAME=$(hostname) \
   -v /app/puser/opt/batch_monitor/data:/app/puser/opt/batch_monitor/data \
   -v /app/puser/opt/batch_monitor/logs:/app/puser/opt/batch_monitor/logs \
   batch-monitor:latest \
@@ -68,6 +72,7 @@ docker run --rm \
 docker run --rm \
   --env-file /app/puser/opt/batch_monitor/.env.docker \
   -e TZ=Asia/Seoul \
+  -e MONITOR_HOSTNAME=$(hostname) \
   -v /app/puser/opt/batch_monitor/data:/app/puser/opt/batch_monitor/data \
   -v /app/puser/opt/batch_monitor/logs:/app/puser/opt/batch_monitor/logs \
   batch-monitor:latest \

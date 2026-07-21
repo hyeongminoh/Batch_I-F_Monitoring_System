@@ -28,16 +28,19 @@ import requests
 log = logging.getLogger('detector')
 
 
-def build_prompt(file_id, freq_type, window, check_time, delay_min, anomaly_score, today):
+def build_prompt(file_id, freq_type, window, check_time, delay_min, anomaly_score, today, hostname):
     """미수신 상황 정보를 담은 EXAONE용 프롬프트 문자열을 생성한다."""
     is_month_end = today.day >= 25
     return (
         f"다음 배치 파일 미수신 상황에 대한 한국어 알람 메시지를 아래 형식으로 작성하세요.\n\n"
         f"형식:\n"
         f"[배치 미수신 알람] {{파일ID}}\n"
+        f"모니터링서버: {{hostname}} / 모니터링일자: {{모니터링일자}}\n"
         f"마감: {{EXP_MAX_TIME}} / 지연: {{지연분}}분 / 주기: {{수신주기}}\n"
         f"즉시 확인이 필요합니다.\n\n"
         f"- 파일ID: {file_id}\n"
+        f"- 모니터링서버: {hostname}\n"
+        f"- 모니터링일자: {today}\n"
         f"- 수신 주기: {freq_type}\n"
         f"- 예상 도착 범위: {window['exp_min']} ~ {window['exp_max']} (중앙값: {window['exp_med']})\n"
         f"- 현재 시각: {check_time}\n"
@@ -48,14 +51,14 @@ def build_prompt(file_id, freq_type, window, check_time, delay_min, anomaly_scor
     )
 
 
-def generate(file_id, freq_type, window, check_time, delay_min, anomaly_score, today,
+def generate(file_id, freq_type, window, check_time, delay_min, anomaly_score, today, hostname,
              ollama_url, ollama_model, ollama_timeout):
     """
     LLM 메시지 생성 시도.
     성공 시 (메시지, True) 반환.
     실패 시 (None, False) 반환.
     """
-    prompt = build_prompt(file_id, freq_type, window, check_time, delay_min, anomaly_score, today)
+    prompt = build_prompt(file_id, freq_type, window, check_time, delay_min, anomaly_score, today, hostname)
 
     try:
         log.info(f"  [{file_id}] LLM 호출 중 ({ollama_model}) ...")
